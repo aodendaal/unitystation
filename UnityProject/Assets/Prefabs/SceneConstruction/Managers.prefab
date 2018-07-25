@@ -12752,7 +12752,7 @@ MonoBehaviour:
 
     E = Equip
 
-    R = Throw
+    R = Throw/Reload
 
     X = Swap hands'
 --- !u!114 &114382172479544346

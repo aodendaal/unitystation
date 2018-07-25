@@ -39,11 +39,11 @@ GameObject:
   - component: {fileID: 114022233371835864}
   - component: {fileID: 114875290499615288}
   - component: {fileID: 114567485071167784}
-  - component: {fileID: 114146055759025064}
+  - component: {fileID: 114179285631091186}
   - component: {fileID: 114335573703485954}
   - component: {fileID: 114690376875817604}
   m_Layer: 10
-  m_Name: Mop
+  m_Name: Bucket
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -115,25 +115,25 @@ MonoBehaviour:
   m_SceneId:
     m_Value: 0
   m_AssetId:
-    i0: 172
-    i1: 248
-    i2: 132
-    i3: 57
-    i4: 241
-    i5: 103
-    i6: 178
-    i7: 244
-    i8: 105
-    i9: 131
-    i10: 63
-    i11: 120
-    i12: 20
-    i13: 27
-    i14: 176
-    i15: 253
+    i0: 161
+    i1: 139
+    i2: 255
+    i3: 204
+    i4: 253
+    i5: 33
+    i6: 42
+    i7: 84
+    i8: 43
+    i9: 108
+    i10: 141
+    i11: 16
+    i12: 232
+    i13: 227
+    i14: 129
+    i15: 238
   m_ServerOnly: 0
   m_LocalPlayerAuthority: 0
---- !u!114 &114146055759025064
+--- !u!114 &114179285631091186
 MonoBehaviour:
   m_ObjectHideFlags: 1
   m_PrefabParentObject: {fileID: 0}
@@ -141,7 +141,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1907679543779350}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3d3831ade83f68a4f8fac0937ad6f101, type: 3}
+  m_Script: {fileID: 11500000, guid: 4e1ce0dbeeeb473dae66fb3610953c99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!114 &114335573703485954
@@ -180,10 +180,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   clothingReference: -1
   hierarchy: 
-  inHandReferenceLeft: 312
-  inHandReferenceRight: 324
-  itemDescription: A certified janitor's mop
-  itemName: Mop
+  inHandReferenceLeft: 316
+  inHandReferenceRight: 328
+  itemDescription: It's a bucket
+  itemName: Bucket
   size: 2
   spriteType: 0
   type: 0
@@ -252,7 +252,7 @@ SpriteRenderer:
   m_SortingLayerID: -1463207863
   m_SortingLayer: 10
   m_SortingOrder: 10
-  m_Sprite: {fileID: 21300006, guid: a6d4fdfa021243f19c2ec66cb5526538, type: 3}
+  m_Sprite: {fileID: 21300004, guid: a6d4fdfa021243f19c2ec66cb5526538, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
