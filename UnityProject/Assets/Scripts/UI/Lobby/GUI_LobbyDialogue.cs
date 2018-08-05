@@ -32,7 +32,7 @@ namespace UI
 			networkManager = CustomNetworkManager.Instance;
 
 			// Init server address and port defaults
-			if (Managers.instance.isForRelease)
+			if (BuildPreferences.isForRelease)
 			{
 				serverAddressInput.text = Managers.instance.serverIP;
 			}
@@ -42,7 +42,7 @@ namespace UI
 			}
 			serverPortInput.text = DefaultServerPort.ToString();
 
-			// OnChange handler for toggle to 
+			// OnChange handler for toggle to
 			// disable server address and port
 			// input fields
 			hostServerToggle.onValueChanged.AddListener(isOn =>
@@ -51,6 +51,7 @@ namespace UI
 					serverPortInput.interactable = !isOn;
 				}
 			);
+			hostServerToggle.onValueChanged.Invoke( hostServerToggle.isOn );
 
 			// Init Lobby UI
 			InitPlayerName();
@@ -84,7 +85,7 @@ namespace UI
 
 			// Start game
 			dialogueTitle.text = "Starting Game...";
-			if (Managers.instance.isForRelease || !hostServerToggle.isOn)
+			if (BuildPreferences.isForRelease || !hostServerToggle.isOn)
 			{
 				ConnectToServer();
 			}
@@ -129,7 +130,7 @@ namespace UI
 			string serverAddress = serverAddressInput.text;
 			if (string.IsNullOrEmpty(serverAddress))
 			{
-				if (Managers.instance.isForRelease)
+				if (BuildPreferences.isForRelease)
 				{
 					serverAddress = Managers.instance.serverIP;
 				}
