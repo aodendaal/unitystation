@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using AccessType;
-using PlayGroup;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace Equipment
-{
+
 	public class Equipment : NetworkBehaviour
 	{
 		public ClothingItem[] clothingSlots;
@@ -107,15 +104,6 @@ namespace Equipment
 			if (playerScript.JobType == JobType.NULL)
 			{
 				yield break;
-			}
-
-			if(playerScript.JobType == JobType.SYNDICATE){
-				//Check to see if there is a nuke and communicate the nuke code:
-				NukeInteract nuke = FindObjectOfType<NukeInteract>();
-				if(nuke != null){
-					UpdateChatMessage.Send(gameObject, ChatChannel.Syndicate, 
-					                       "We have intercepted the code for the nuclear weapon: " + nuke.NukeCode);
-				}
 			}
 
 			PlayerScript pS = GetComponent<PlayerScript>();
@@ -227,6 +215,18 @@ namespace Equipment
 				}
 			}
 			SpawnID(jobOutfit);
+
+			yield return new WaitForSeconds(3f); //Wait a bit for headset to be fully setup and player to be fully spawned.
+			if (playerScript.JobType == JobType.SYNDICATE)
+			{
+				//Check to see if there is a nuke and communicate the nuke code:
+				NukeInteract nuke = FindObjectOfType<NukeInteract>();
+				if (nuke != null)
+				{
+					UpdateChatMessage.Send(gameObject, ChatChannel.Syndicate,
+														"We have intercepted the code for the nuclear weapon: " + nuke.NukeCode);
+				}
+			}	
 		}
 
 		private void SpawnID(JobOutfit outFit)
@@ -255,7 +255,7 @@ namespace Equipment
 		{
 			ItemAttributes att = obj.GetComponent<ItemAttributes>();
 			EquipmentPool.AddGameObject(gameObject, obj);
-			SetHandItemSprite(slotName, att);
+			SetHandItemSprite(att);
 			RpcSendMessage(slotName, obj);
 		}
 
@@ -308,10 +308,10 @@ namespace Equipment
 		}
 
 		//To set the actual sprite on the player obj
-		public void SetHandItemSprite(string slotName, ItemAttributes att)
+		public void SetHandItemSprite(ItemAttributes att)
 		{
-			Epos enumA = (Epos) Enum.Parse(typeof(Epos), slotName);
-			if (slotName == "leftHand")
+			Epos enumA = (Epos) Enum.Parse(typeof(Epos), playerNetworkActions.activeHand);
+			if (playerNetworkActions.activeHand == "leftHand")
 			{
 				syncEquipSprites[(int) enumA] = att.NetworkInHandRefLeft();
 			}
@@ -355,4 +355,3 @@ namespace Equipment
 			playerNetworkActions.AddItem(obj, slotName, true);
 		}
 	}
-}

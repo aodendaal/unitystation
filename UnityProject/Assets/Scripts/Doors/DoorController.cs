@@ -1,14 +1,8 @@
 ﻿using System.Collections;
-using Sprites;
-using Tilemaps;
-using Tilemaps.Behaviours.Layers;
-using Tilemaps.Behaviours.Objects;
-using UI;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace Doors
-{
+
 	public class DoorController : ManagedNetworkBehaviour
 	{
 		//public bool isWindowed = false;
@@ -77,15 +71,28 @@ namespace Doors
 		public void BoxCollToggleOn()
 		{
 			registerTile.IsClosed = true;
-			gameObject.layer = closedLayer;
+
+			SetLayer(closedLayer);
+
 			spriteRenderer.sortingLayerID = closedSortingLayer;
 		}
 
 		public void BoxCollToggleOff()
 		{
 			registerTile.IsClosed = false;
-			gameObject.layer = openLayer;
+
+			SetLayer(openLayer);
+
 			spriteRenderer.sortingLayerID = openSortingLayer;
+		}
+
+		private void SetLayer(int layer)
+		{
+			gameObject.layer = layer;
+			foreach (Transform child in transform)
+			{
+				child.gameObject.layer = layer;
+			}
 		}
 
 		private IEnumerator WaitUntilClose()
@@ -210,4 +217,3 @@ namespace Doors
 
 		#endregion
 	}
-}

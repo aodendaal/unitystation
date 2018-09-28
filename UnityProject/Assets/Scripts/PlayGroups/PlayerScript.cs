@@ -1,16 +1,10 @@
 using System.Collections;
-using PlayGroups.Input;
-using UI;
 using UnityEngine;
 using UnityEngine.Networking;
 using Facepunch.Steamworks;
-using Tilemaps.Behaviours.Objects;
-using UnityEngine.Experimental.UIElements;
-using Util;
 
-namespace PlayGroup
-{
-	public class PlayerScript : ManagedNetworkBehaviour
+
+public class PlayerScript : ManagedNetworkBehaviour
 	{
 		// the maximum distance the player needs to be to an object to interact with it
 		//1.75 is the optimal distance to now have any direction click too far
@@ -40,7 +34,8 @@ namespace PlayGroup
 
 		public PlayerSprites playerSprites { get; set; }
 
-		public PlayerSync playerSync { get; set; }
+		private PlayerSync playerSync; //Example of good on-demand reference init
+		public PlayerSync PlayerSync => playerSync ? playerSync : ( playerSync = GetComponent<PlayerSync>() );
 
 		public RegisterTile registerTile { get; set; }
 
@@ -96,7 +91,6 @@ namespace PlayGroup
 		private void Start()
 		{
 			playerNetworkActions = GetComponent<PlayerNetworkActions>();
-			playerSync = GetComponent<PlayerSync>();
 			registerTile = GetComponent<RegisterTile>();
 			playerHealth = GetComponent<PlayerHealth>();
 			weaponNetworkActions = GetComponent<WeaponNetworkActions>();
@@ -128,8 +122,9 @@ namespace PlayGroup
 
 				if (PlayerManager.LocalPlayerScript.JobType == JobType.NULL)
 				{
-					// I (client) have connected to the server, ask what my job preference is
-					UIManager.Instance.GetComponent<ControlDisplays>().jobSelectWindow.SetActive(true);
+					// I (client) have connected to the server, ask server what is going on, by first asking what the UI should be? 
+
+					UIManager.Display.DetermineGameMode();
 				}
 				UIManager.SetDeathVisibility(true);
 				if ( BuildPreferences.isSteamServer ) {
@@ -243,6 +238,9 @@ namespace PlayGroup
 
 		public ChatChannel GetAvailableChannelsMask(bool transmitOnly = true)
 		{
+			if(this == null){
+				return ChatChannel.OOC;
+			}
 			PlayerMove pm = gameObject.GetComponent<PlayerMove>();
 			if (pm.isGhost)
 			{
@@ -326,4 +324,3 @@ namespace PlayGroup
 			UIManager.SetToolTip = "";
 		}
 	}
-}

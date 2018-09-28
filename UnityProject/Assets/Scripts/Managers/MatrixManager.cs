@@ -2,12 +2,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Tilemaps;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Tilemaps;
-using Tilemaps.Behaviours.Layers;
-using Tilemaps.Tiles;
 
 /// Matrix manager keeps a list of matrices that you can access from both client and server.
 /// Contains world/local position conversion methods, as well as several cross-matrix adaptations of Matrix methods.
@@ -20,12 +17,6 @@ public class MatrixManager : MonoBehaviour
 
 	/// List of active matrices
 	public List<MatrixInfo> Matrices => activeMatrices;
-
-	/// <summary>
-	/// using the Collider2D of a wall tile you can find the tilemap of the topLayerFX in that matrix.
-	/// Used for FOV and any effects that can be shown over the top of walls
-	/// </summary>
-	public Dictionary<Collider2D, Tilemap> wallsToTopLayerFX = new Dictionary<Collider2D, Tilemap>();
 
 	/// <summary>
 	/// Find a wall tilemap via its Tilemap collider
@@ -89,7 +80,10 @@ public class MatrixManager : MonoBehaviour
 		return true;
 	}
 
+	/// <Summary>
 	/// Cross-matrix edition of GetFirst
+	/// Use a Vector3Int of the WorldPosition to use
+	/// </Summary>
 	public T GetFirst<T>(Vector3Int position) where T : MonoBehaviour
 	{
 		for (var i = 0; i < activeMatrices.Count; i++)

@@ -1,16 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using Doors;
-using Tilemaps;
-using Tilemaps.Behaviours.Layers;
-using Tilemaps.Behaviours.Objects;
-using UI;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace PlayGroup
-{
+
 	/// <summary>
 	///     Player move queues the directional move keys
 	///     to be processed along with the server.
@@ -86,7 +79,7 @@ namespace PlayGroup
 				curMatrix = matrix;
 			}
 
-			Vector3Int direction = GetDirection(action, MatrixManager.Get(curMatrix));
+			Vector3Int direction = GetDirection(action, MatrixManager.Get(curMatrix), isReplay);
 			Vector3Int adjustedDirection = AdjustDirection(currentPosition, direction, isReplay, curMatrix);
 
 			if (adjustedDirection == Vector3.zero)
@@ -120,13 +113,13 @@ namespace PlayGroup
 			return "QWERTY";
 		}
 
-		private Vector3Int GetDirection(PlayerAction action, MatrixInfo matrixInfo)
+		private Vector3Int GetDirection(PlayerAction action, MatrixInfo matrixInfo, bool isReplay)
 		{
 			ProcessAction(action);
 
 			if (diagonalMovement)
 			{
-				return GetMoveDirection(matrixInfo);
+				return GetMoveDirection(matrixInfo, isReplay);
 			}
 			if (pressedKeys.Count > 0)
 			{
@@ -153,7 +146,7 @@ namespace PlayGroup
 			}
 		}
 
-		private Vector3Int GetMoveDirection(MatrixInfo matrixInfo)
+		private Vector3Int GetMoveDirection(MatrixInfo matrixInfo, bool isReplay)
 		{
 			Vector3Int direction = Vector3Int.zero;
 
@@ -166,7 +159,7 @@ namespace PlayGroup
 			direction.y = Mathf.Clamp(direction.y, -1, 1);
 			Logger.Log(direction.ToString(), Category.Movement);
 
-			if (!isGhost && PlayerManager.LocalPlayer == gameObject)
+			if (!isGhost && PlayerManager.LocalPlayer == gameObject && !isReplay)
 			{
 				playerSprites.CmdChangeDirection(Orientation.From(direction));
 				// Prediction:
@@ -344,4 +337,3 @@ namespace PlayGroup
 			}
 		}
 	}
-}

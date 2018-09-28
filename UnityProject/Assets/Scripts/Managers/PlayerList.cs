@@ -1,13 +1,9 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using PlayGroup;
-using UI;
 using UnityEngine;
 using UnityEngine.Networking;
-using Util;
 
 /// Comfy place to get players and their info (preferably via their connection)
 /// Has limited scope for clients (ClientConnectedPlayers only), sweet things are mostly for server
@@ -24,14 +20,20 @@ public class PlayerList : NetworkBehaviour
 	public int ConnectionCount => values.Count;
 	public List<ConnectedPlayer> InGamePlayers => values.FindAll( player => player.GameObject != null );
 
+	public bool reportDone = false;
+
 	//For TDM demo
-	public Dictionary<JobDepartment, int> departmentScores = new Dictionary<JobDepartment, int>();
+	//public Dictionary<JobDepartment, int> departmentScores = new Dictionary<JobDepartment, int>();
 
 	//For combat demo
 	public Dictionary<string, int> playerScores = new Dictionary<string, int>();
 
-	//For job formatting purposes
-	private static readonly TextInfo textInfo = new CultureInfo("en-US", false).TextInfo;
+	//Nuke Ops (TODO: throughoutly remove all unnecessary TDM variables)
+	public bool nukeSetOff = false;
+	//Kill counts for crew members and syndicate for display at end of round, similar to past TDM department scores
+	public int crewKills;
+	public int syndicateKills;
+
 
 	private void Awake()
 	{
@@ -74,22 +76,14 @@ public class PlayerList : NetworkBehaviour
 			playerScores[playerName]++;
 		}
 
-		JobDepartment perpetratorDept = SpawnPoint.GetJobDepartment(perPlayer.Job);
-
-		if ( !departmentScores.ContainsKey(perpetratorDept) )
+		//If killer is syndicate, add kills to syndicate score, if not - to crew.
+		if(perPlayer.Job == JobType.SYNDICATE)
 		{
-			departmentScores.Add(perpetratorDept, 0);
-		}
-
-		JobDepartment victimDept = SpawnPoint.GetJobDepartment(victimPlayer.Job);
-
-		if ( perpetratorDept == victimDept )
-		{
-			departmentScores[perpetratorDept]--;
+			syndicateKills++;
 		}
 		else
 		{
-			departmentScores[perpetratorDept]++;
+			crewKills++;
 		}
 	}
 
@@ -105,30 +99,71 @@ public class PlayerList : NetworkBehaviour
 	[Server]
 	public void ReportScores()
 	{
-		/*
-		var scoreSort = playerScores.OrderByDescending(pair => pair.Value)
-		    .ToDictionary(pair => pair.Key, pair => pair.Value);
-
-		foreach (KeyValuePair<string, int> ps in scoreSort)
+		if (!reportDone)
 		{
-		    UIManager.Chat.ReportToChannel("<b>" + ps.Key + "</b>  total kills:  <b>" + ps.Value + "</b>");
-		}
-		*/
+			//if (!nukeSetOff && syndicateKills == 0 && crewKills == 0)
+			//{
+			//	PostToChatMessage.Send("Nobody killed anybody. Fucking hippies.", ChatChannel.System);
+			//}
 
-		if ( departmentScores.Count == 0 )
+			if (nukeSetOff)
+			{
+				PostToChatMessage.Send("Nuke has been detonated, <b>Syndicate wins.</b>", ChatChannel.System);
+				ReportKills();
+			}
+			else if (GetCrewAliveCount() > 0 && EscapeShuttle.Instance.GetCrewCountOnboard() == 0)
+			{
+				PostToChatMessage.Send("Station crew failed to escape, <b>Syndicate wins.</b>", ChatChannel.System);
+				ReportKills();
+			}
+			else if (GetCrewAliveCount() == 0)
+			{
+				PostToChatMessage.Send("All crew members are dead, <b>Syndicate wins.</b>", ChatChannel.System);
+				ReportKills();
+			}
+			else if (GetCrewAliveCount() > 0 && EscapeShuttle.Instance.GetCrewCountOnboard() > 0)
+			{
+				PostToChatMessage.Send(EscapeShuttle.Instance.GetCrewCountOnboard() + " Crew member(s) have managed to escape the station. <b>Syndicate lost.</b>", ChatChannel.System);
+				ReportKills();
+			}
+			
+			PostToChatMessage.Send("Game Restarting in 30 seconds...", ChatChannel.System);
+			reportDone = true;
+		}
+	}
+
+	[Server]
+	public void ReportKills()
+	{
+		if (syndicateKills != 0)
 		{
-			PostToChatMessage.Send("Nobody killed anybody. Fucking hippies.", ChatChannel.System);
+			PostToChatMessage.Send("Syndicate managed to kill " + syndicateKills + " crew members.", ChatChannel.System);
 		}
 
-		var scoreSort = departmentScores.OrderByDescending(pair => pair.Value)
-			.ToDictionary(pair => pair.Key, pair => pair.Value);
-
-		foreach ( KeyValuePair<JobDepartment, int> ds in scoreSort )
+		if (crewKills != 0)
 		{
-			PostToChatMessage.Send("<b>" + ds.Key + "</b>  total kills:  <b>" + ds.Value + "</b>", ChatChannel.System);
+			PostToChatMessage.Send("Crew managed to kill " + crewKills + " Syndicate operators.", ChatChannel.System);
+		}
+	}
+
+	public int GetCrewAliveCount()
+	{
+		int alive = 0;
+
+		List<ConnectedPlayer> alivePlayers = InGamePlayers;
+		foreach (ConnectedPlayer ps in alivePlayers)
+		{
+			if(ps.Job == JobType.SYNDICATE || ps.GameObject.GetComponent<PlayerMove>().allowInput == false)
+			{
+				//Do nothing
+			}
+			else
+			{
+				alive++; //If player is alive and is not syndicate, add to alive count
+			}
 		}
 
-		PostToChatMessage.Send("Game Restarting in 10 seconds...", ChatChannel.System);
+		return alive;
 	}
 
 	public void RefreshPlayerListText()
@@ -137,13 +172,8 @@ public class PlayerList : NetworkBehaviour
 		foreach (var player in ClientConnectedPlayers)
 		{
 			string curList = UIManager.Instance.playerListUIControl.nameList.text;
-			UIManager.Instance.playerListUIControl.nameList.text = $"{curList}{player.Name} ({PrepareJobString(player.Job)})\r\n";
+			UIManager.Instance.playerListUIControl.nameList.text = $"{curList}{player.Name} ({player.Job.JobString()})\r\n";
 		}
-	}
-
-	private static string PrepareJobString(JobType job)
-	{
-		return job.ToString().Equals("NULL") ? "*just joined" : textInfo.ToTitleCase(job.ToString().ToLower());
 	}
 
 	/// Don't do this unless you realize the consequences
@@ -230,7 +260,7 @@ public class PlayerList : NetworkBehaviour
 
 	public static bool IsConnWhitelisted( ConnectedPlayer player )
 	{
-		return player.Connection == null || 
+		return player.Connection == null ||
 		       player.Connection == ConnectedPlayer.Invalid.Connection ||
 		       !player.Connection.isConnected;
 	}
@@ -253,37 +283,37 @@ public class PlayerList : NetworkBehaviour
 	{
 		return !Get(connection).Equals(ConnectedPlayer.Invalid);
 	}
-	
+
 	[Server]
 	public bool ContainsName(string name)
 	{
 		return !Get(name).Equals(ConnectedPlayer.Invalid);
 	}
-	
+
 	[Server]
 	public bool ContainsGameObject(GameObject gameObject)
 	{
 		return !Get(gameObject).Equals(ConnectedPlayer.Invalid);
 	}
-	
+
 	[Server]
 	public ConnectedPlayer Get(NetworkConnection byConnection, bool lookupOld = false)
 	{
 		return getInternal(player => player.Connection == byConnection, lookupOld);
 	}
-	
+
 	[Server]
 	public ConnectedPlayer Get(string byName, bool lookupOld = false)
 	{
 		return getInternal(player => player.Name == byName, lookupOld);
 	}
-	
+
 	[Server]
 	public ConnectedPlayer Get(GameObject byGameObject, bool lookupOld = false)
 	{
 		return getInternal(player => player.GameObject == byGameObject, lookupOld);
-	}	
-	
+	}
+
 	[Server]
 	public ConnectedPlayer Get(ulong bySteamId, bool lookupOld = false)
 	{
@@ -330,8 +360,8 @@ public class PlayerList : NetworkBehaviour
 
 	[Server]
 	private void CheckRcon(){
-		if(Rcon.RconManager.Instance != null){
-			Rcon.RconManager.UpdatePlayerListRcon();
+		if(RconManager.Instance != null){
+			RconManager.UpdatePlayerListRcon();
 		}
 	}
 }

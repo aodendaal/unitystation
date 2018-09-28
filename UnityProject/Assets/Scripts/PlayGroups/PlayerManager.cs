@@ -2,14 +2,13 @@
 using UnityEngine.SceneManagement;
 
 //Handles control and spawn of player prefab
-namespace PlayGroup
-{
+
 	public class PlayerManager : MonoBehaviour
 	{
 		private static PlayerManager playerManager;
 		public static GameObject LocalPlayer { get; private set; }
 
-		public static Equipment.Equipment Equipment { get; private set; }
+		public static Equipment Equipment { get; private set; }
 
 		public static PlayerScript LocalPlayerScript { get; private set; }
 
@@ -60,7 +59,7 @@ namespace PlayGroup
 
 			PlayerScript =
 				LocalPlayerScript; // Set this on the manager so it can be accessed by other components/managers
-			Camera2DFollow.followControl.target = LocalPlayer.transform;
+			Camera2DFollow.followControl.target = LocalPlayer.transform.Find("Sprites");
 
 			HasSpawned = true;
 		}
@@ -74,4 +73,3 @@ namespace PlayGroup
 			return false;
 		}
 	}
-}

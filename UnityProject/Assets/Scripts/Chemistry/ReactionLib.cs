@@ -1,16 +1,11 @@
 ﻿using System;
 using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 
-namespace Chemistry
-{
+
 	//Initialization.run();
 	//var area = new Dictionary<String, float>();
 	//area.Add("potassium", 59.0f);
@@ -49,7 +44,7 @@ namespace Chemistry
 		public float MinimumTemperature{ get; set; }
 	}
 
-	public static class Globals
+	public static class ChemistryGlobals
 	{
 		public static bool IsInitialised = false;
 		public static Dictionary<String, HashSet<Reaction>> ReactionsStoreDictionary = new Dictionary<String, HashSet<Reaction>> ();
@@ -66,7 +61,6 @@ namespace Chemistry
 
 		private static void JsonImportInitialization ()
 		{
-			//ok, 	This is where loads note that Minimum temperature and  Catalysts MinimumTemperature Need to be in the.json File Even if there blank, Need to improve a bit 
 			string json = (Resources.Load (@"Metadata\Reactions") as TextAsset).ToString ();
 			var JsonReactions = JsonConvert.DeserializeObject<List<Dictionary<String,System.Object>>> (json);
 			for (var i = 0; i < JsonReactions.Count (); i++) {
@@ -92,20 +86,20 @@ namespace Chemistry
 					ReactionPass.MinimumTemperature = 0.0f;
 				}
 
-				Globals.reactions.Add (ReactionPass);
+				ChemistryGlobals.reactions.Add (ReactionPass);
 			}
 			Logger.Log ("JsonImportInitialization done!", Category.Chemistry);
 		}
 
 		private static void CemInitialization ()
 		{
-			for (var i = 0; i < Globals.reactions.Count (); i++) {
+			for (var i = 0; i < ChemistryGlobals.reactions.Count (); i++) {
                     
-				foreach (string Chemical in Globals.reactions[i].ReagentsAndRatio.Keys) {
-					if (!(Globals.ReactionsStoreDictionary.ContainsKey (Chemical))) {
-						Globals.ReactionsStoreDictionary [Chemical] = new HashSet<Reaction> ();
+				foreach (string Chemical in ChemistryGlobals.reactions[i].ReagentsAndRatio.Keys) {
+					if (!(ChemistryGlobals.ReactionsStoreDictionary.ContainsKey (Chemical))) {
+						ChemistryGlobals.ReactionsStoreDictionary [Chemical] = new HashSet<Reaction> ();
 					}
-					Globals.ReactionsStoreDictionary [Chemical].Add (Globals.reactions [i]);
+					ChemistryGlobals.ReactionsStoreDictionary [Chemical].Add (ChemistryGlobals.reactions [i]);
 				}
 			}
 		}
@@ -120,7 +114,7 @@ namespace Chemistry
 		{
 			HashSet<Reaction> ReactionBuffer = new HashSet<Reaction> ();
 			foreach (string Chemical in Area.Keys) {
-				foreach (var Reaction in Globals.ReactionsStoreDictionary[Chemical]) { //so A list of every reaction that that chemical can be in
+				foreach (var Reaction in ChemistryGlobals.ReactionsStoreDictionary[Chemical]) { //so A list of every reaction that that chemical can be in
 					if (!(Reaction.MinimumTemperature > Temperature)) {
 						bool ValidReaction = new bool ();
 						ValidReaction = true;
@@ -184,4 +178,3 @@ namespace Chemistry
 			return (n2 / n1);	
 		}
 	}
-}

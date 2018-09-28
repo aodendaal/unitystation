@@ -3,8 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Facepunch.Steamworks;
-using PlayGroup;
-using UI;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.Profiling;
@@ -44,9 +42,11 @@ public class CustomNetworkManager : NetworkManager
 //		}
 
 		channels.Add(QosType.ReliableSequenced);
+		channels.Add(QosType.UnreliableFragmented);
 
 		connectionConfig.AcksType = ConnectionAcksType.Acks64;
 		connectionConfig.FragmentSize = 512;
+		connectionConfig.PacketSize = 1440;
 
 		if(GameData.IsInGame && PoolManager.Instance == null){
 			ObjectManager.StartPoolManager();
@@ -325,7 +325,13 @@ public class CustomNetworkManager : NetworkManager
 		//All players
 		List<ConnectedPlayer> players = PlayerList.Instance.InGamePlayers;
 		for ( var i = 0; i < players.Count; i++ ) {
-			players[i].Script.playerSync.NotifyPlayer( playerGameObject, true );
+			players[i].Script.PlayerSync.NotifyPlayer( playerGameObject, true );
+		}
+
+		//TileChange Data
+		TileChangeManager[] tcManagers = FindObjectsOfType<TileChangeManager>();
+		for(var i = 0; i < tcManagers.Length; i++){
+			tcManagers[i].NotifyPlayer( playerGameObject );
 		}
 
 		Logger.Log($"Sent sync data ({matrices.Length} matrices, {scripts.Length} transforms, {players.Count} players) to {playerGameObject.name}", Category.Connections);

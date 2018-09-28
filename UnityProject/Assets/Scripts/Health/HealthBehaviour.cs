@@ -1,10 +1,7 @@
-﻿using PlayGroup;
-using PlayGroups.Input;
-using UI;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Networking;
 
-public abstract class HealthBehaviour : InputTrigger
+public abstract class HealthBehaviour : NetworkBehaviour
 {
 	//For meat harvest (pete etc)
 	public bool allowKnifeHarvest;
@@ -156,22 +153,6 @@ public abstract class HealthBehaviour : InputTrigger
 	}
 
 	protected abstract void OnDeathActions();
-	
-	//TODO move to p2pinteractions?
-	public override void Interact(GameObject originator, Vector3 position, string hand) {
-		if ( UIManager.Hands.CurrentSlot.Item == null 
-		     || !PlayerManager.PlayerInReach( transform ) 
-		     || UIManager.CurrentIntent != Intent.Attack
-//		     || UIManager.Hands.CurrentSlot.Item.GetComponent<ItemAttributes>().type != ItemType.Knife
-		     ) {
-			return;
-		}
-			Vector2 dir = (Camera.main.ScreenToWorldPoint(Input.mousePosition) - PlayerManager.LocalPlayer.transform.position).normalized;
-	
-			PlayerScript lps = PlayerManager.LocalPlayerScript;
-			lps.weaponNetworkActions.CmdRequestMeleeAttack(gameObject, UIManager.Hands.CurrentSlot.eventName, dir,
-				UIManager.DamageZone);
-	}
 }
 
 public static class HealthThreshold

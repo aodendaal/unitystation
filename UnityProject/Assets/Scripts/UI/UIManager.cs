@@ -1,9 +1,7 @@
-﻿using PlayGroup;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
-namespace UI
-{
+
 	public class UIManager : MonoBehaviour
 	{
 		private static UIManager uiManager;
@@ -11,6 +9,7 @@ namespace UI
 		public ControlChat chatControl;
 		public ControlDisplays displayControl;
 		public DisplayManager displayManager;
+		public GameObject bottomBar;
 		public Hands hands;
 		public ControlIntent intentControl;
 		public InventorySlotCache inventorySlotCache;
@@ -19,6 +18,8 @@ namespace UI
 		public Text toolTip;
 		public ControlWalkRun walkRunControl;
 		public Toggle ttsToggle;
+		[HideInInspector]
+		public ProgressBar progressBar;
 
 		///Global flag for focused input field. Movement keystrokes are ignored if true.
 		/// <see cref="InputFieldFocus"/> handles this flag automatically
@@ -51,7 +52,7 @@ namespace UI
 		}
 
 //		public static ControlChat Chat => Instance.chatControl; //Use ChatRelay.Instance.AddToChatLog instead!
-
+		public static ProgressBar ProgressBar => Instance.progressBar;
 		public static PlayerHealthUI PlayerHealthUI => Instance.playerHealthUI;
 
 		public static Hands Hands => Instance.hands;
@@ -227,4 +228,3 @@ namespace UI
 			}
 		}
 	}
-}
