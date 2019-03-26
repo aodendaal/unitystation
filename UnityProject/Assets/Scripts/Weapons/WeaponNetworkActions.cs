@@ -23,7 +23,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 	public GameObject muzzleFlash;
 	private PlayerMove playerMove;
 	private PlayerScript playerScript;
-	private SoundNetworkActions soundNetworkActions;
+	private RegisterPlayer registerPlayer;
 	private GameObject spritesObj;
 
 	private GameObject casingPrefab;
@@ -32,7 +32,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 	{
 		spritesObj = transform.Find("Sprites").gameObject;
 		playerMove = GetComponent<PlayerMove>();
-		soundNetworkActions = GetComponent<SoundNetworkActions>();
+		registerPlayer = GetComponent<RegisterPlayer>();
 		playerScript = GetComponent<PlayerScript>();
 		lerpSprite = null;
 
@@ -44,7 +44,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 	{
 		Weapon w = weapon.GetComponent<Weapon>();
 		NetworkInstanceId networkID = magazine.GetComponent<NetworkIdentity>().netId;
-		w.MagNetID = networkID;
+		w.ServerHandleReloadRequest(networkID);
 		GetComponent<PlayerNetworkActions>().ClearInventorySlot(hand);
 	}
 
@@ -52,8 +52,16 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 	public void CmdUnloadWeapon(GameObject weapon)
 	{
 		Weapon w = weapon.GetComponent<Weapon>();
-		NetworkInstanceId networkID = NetworkInstanceId.Invalid;
-		w.MagNetID = networkID;
+
+		var cnt = w.CurrentMagazine?.GetComponent<CustomNetTransform>();
+		if(cnt != null)
+		{
+			cnt.InertiaDrop(transform.position, playerScript.PlayerSync.SpeedServer, playerScript.PlayerSync.ServerState.Impulse);
+		} else {
+			Logger.Log("Magazine not found for unload weapon", Category.Firearms);
+		}
+
+		w.ServerHandleUnloadRequest();
 	}
 
 	[Command]
@@ -61,7 +69,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 		BodyPartType damageZone, LayerType layerType)
 	{
 		if (!playerMove.allowInput ||
-			playerMove.isGhost ||
+			playerScript.IsGhost ||
 			!victim ||
 			!playerScript.playerNetworkActions.SlotNotEmpty(slot) ||
 			!playerScript.playerHealth.serverPlayerConscious
@@ -74,20 +82,21 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 			return;
 		}
 
-		var weapon = playerScript.playerNetworkActions.Inventory[slot];
+		var weapon = playerScript.playerNetworkActions.Inventory[slot].Item;
 		ItemAttributes weaponAttr = weapon.GetComponent<ItemAttributes>();
 
 		// If Tilemap LayerType is not None then it is a tilemap being attacked
 		if (layerType != LayerType.None)
 		{
-			var tileChangeManager = victim.GetComponent<TileChangeManager>();
+			TileChangeManager tileChangeManager = victim.GetComponent<TileChangeManager>();
+			MetaTileMap metaTileMap = victim.GetComponentInChildren<MetaTileMap>();
 			if (tileChangeManager == null)
 			{
 				return;
 			}
 
 			//Tilemap stuff:
-			var tileMapDamage = tileChangeManager.GetTilemap(layerType).gameObject.GetComponent<TilemapDamage>();
+			var tileMapDamage = metaTileMap.Layers[layerType].GetComponent<TilemapDamage>();
 			if (tileMapDamage != null)
 			{
 				//Wire cutters should snip the grills instead:
@@ -111,13 +120,13 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 		}
 
 		//This check cannot be used with TilemapDamage as the transform position is always far away
-		if (!playerScript.IsInReach(victim.transform.position))
+		if (!playerScript.IsInReach(victim))
 		{
 			return;
 		}
 
 		//Meaty bodies:
-		HealthBehaviour victimHealth = victim.GetComponent<HealthBehaviour>();
+		LivingHealthBehaviour victimHealth = victim.GetComponent<LivingHealthBehaviour>();
 
 		if (victimHealth.IsDead && weaponAttr.type == ItemType.Knife)
 		{
@@ -127,7 +136,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 				RpcMeleeAttackLerp(stabDirection, weapon);
 				playerMove.allowInput = false;
 				attackTarget.Harvest();
-				soundNetworkActions.RpcPlayNetworkSound("BladeSlice", transform.position);
+				SoundManager.PlayNetworkedAtPos( "BladeSlice", transform.position );
 			}
 			else
 			{
@@ -135,7 +144,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 				RpcMeleeAttackLerp(stabDirection, weapon);
 				playerMove.allowInput = false;
 				attackTarget.Harvest();
-				soundNetworkActions.RpcPlayNetworkSound("BladeSlice", transform.position);
+				SoundManager.PlayNetworkedAtPos( "BladeSlice", transform.position );
 			}
 			return;
 		}
@@ -146,13 +155,13 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 			playerMove.allowInput = false;
 		}
 
-		victimHealth.ApplyDamage(gameObject, (int) weaponAttr.hitDamage, DamageType.BRUTE, damageZone);
+		victimHealth.ApplyDamage(gameObject, (int) weaponAttr.hitDamage, DamageType.Brute, damageZone);
 		if (weaponAttr.hitDamage > 0)
 		{
 			PostToChatMessage.SendItemAttackMessage(weapon, gameObject, victim, (int) weaponAttr.hitDamage, damageZone);
 		}
 
-		soundNetworkActions.RpcPlayNetworkSound(weaponAttr.hitSound, transform.position);
+		SoundManager.PlayNetworkedAtPos( weaponAttr.hitSound, transform.position );
 		StartCoroutine(AttackCoolDown());
 
 	}
@@ -184,10 +193,15 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 		{
 			playerScript.hitIcon.ShowHitIcon(stabDir, lerpSprite);
 		}
-		lerpFrom = transform.position;
-		Vector3 newDir = stabDir * 0.5f;
-		newDir.z = lerpFrom.z;
-		lerpTo = lerpFrom + newDir;
+
+		Vector3 lerpFromWorld = spritesObj.transform.position;
+		Vector3 lerpToWorld = lerpFromWorld + (Vector3)(stabDir * 0.5f);
+		Vector3 lerpFromLocal = spritesObj.transform.parent.InverseTransformPoint(lerpFromWorld);
+		Vector3 lerpToLocal = spritesObj.transform.parent.InverseTransformPoint(lerpToWorld);
+		Vector3 localStabDir = lerpToLocal - lerpFromLocal;
+
+		lerpFrom = lerpFromLocal;
+		lerpTo = lerpToLocal;
 		lerpProgress = 0f;
 		isForLerpBack = true;
 		lerping = true;
@@ -212,8 +226,8 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 		if (lerping)
 		{
 			lerpProgress += Time.deltaTime;
-			spritesObj.transform.position = Vector3.Lerp(lerpFrom, lerpTo, lerpProgress * speed);
-			if (spritesObj.transform.position == lerpTo || lerpProgress > 2f)
+			spritesObj.transform.localPosition = Vector3.Lerp(lerpFrom, lerpTo, lerpProgress * speed);
+			if (spritesObj.transform.localPosition == lerpTo || lerpProgress > 2f)
 			{
 				if (!isForLerpBack)
 				{
@@ -232,7 +246,7 @@ public class WeaponNetworkActions : ManagedNetworkBehaviour
 					//To lerp back from knife attack
 					ResetLerp();
 					lerpTo = lerpFrom;
-					lerpFrom = spritesObj.transform.position;
+					lerpFrom = spritesObj.transform.localPosition;
 					lerping = true;
 				}
 			}

@@ -4,12 +4,18 @@ using UnityEngine.UI;
 
 	public class ControlClothing : MonoBehaviour
 	{
-		public Image[] equipImgs;
+		public GameObject retractableGroup;
+		private Image[] equipImgs = new Image[0];
+		public GameObject hideOnRetract;
 		private bool isOpen;
 
 		private void Start()
 		{
 			isOpen = false;
+			if ( retractableGroup )
+			{
+				equipImgs = retractableGroup.GetComponentsInChildren<Image>();
+			}
 			ToggleEquipMenu(false);
 		}
 
@@ -51,6 +57,10 @@ using UnityEngine.UI;
 					equipImgs[i].color = tempCol;
 					equipImgs[i].raycastTarget = false;
 				}
+			}
+			if ( hideOnRetract != null )
+			{
+				hideOnRetract.SetActive( !isOn && UIManager.UseGamePad );
 			}
 		}
 	}

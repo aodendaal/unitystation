@@ -15,7 +15,7 @@ public class Deconstruction : MonoBehaviour
 		{
 			case TileType.Wall:
 				DoWallDeconstruction(cellPosInt, tileChangeManager, worldPos);
-				tileChangeManager.gameObject.GetComponent<SystemManager>().UpdateAt(cellPosInt);
+				tileChangeManager.gameObject.GetComponent<SubsystemManager>().UpdateAt(cellPosInt);
 				break;
 		}
 	}
@@ -46,14 +46,14 @@ public class Deconstruction : MonoBehaviour
 			UIManager.ProgressBar.StartProgress(Vector3Int.RoundToInt(worldCellPos),
 				10f, progressFinishAction, player, "Weld", 0.8f);
 
-			PlaySoundMessage.SendToAll("Weld", worldCellPos, Random.Range(0.9f, 1.1f));
+			SoundManager.PlayNetworkedAtPos("Weld", worldCellPos, Random.Range(0.9f, 1.1f));
 		}
 	}
 
 	private void DoWallDeconstruction(Vector3Int cellPos, TileChangeManager tcm, Vector3 worldPos)
 	{
-		tcm.RemoveTile(cellPos, TileChangeLayer.Wall);
-		PlaySoundMessage.SendToAll("Deconstruct", worldPos, 1f);
+		tcm.RemoveTile(cellPos, LayerType.Walls);
+		SoundManager.PlayNetworkedAtPos("Deconstruct", worldPos, 1f);
 
 		//Spawn 4 metal sheets:
 		int spawnMetalsAmt = 0;

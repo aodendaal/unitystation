@@ -15,22 +15,28 @@ public class PlayerMoveMessage : ServerMessage
 	{
 //		Logger.Log("Processed " + ToString());
 		yield return WaitFor(SubjectPlayer);
-		var playerSync = NetworkObject.GetComponent<PlayerSync>();
-		playerSync.UpdateClientState(State);
-		if (State.ResetClientQueue)
-		{
-			playerSync.ClearQueueClient();
-		}
-		if ( State.MoveNumber == 0 ) {
-//			Logger.Log( "Zero step rollback" );
-			playerSync.ClearQueueClient();
-			playerSync.RollbackPrediction();
+
+		if ( NetworkObject == null ) {
+			yield break;
 		}
 
+		var playerSync = NetworkObject.GetComponent<PlayerSync>();
+		playerSync.UpdateClientState(State);
+
 		if ( NetworkObject == PlayerManager.LocalPlayer ) {
+			if (State.ResetClientQueue)
+			{
+				playerSync.ClearQueueClient();
+			}
+			if ( State.MoveNumber == 0 ) {
+	//			Logger.Log( "Zero step rollback" );
+				playerSync.ClearQueueClient();
+				playerSync.RollbackPrediction();
+			}
+
 			ControlTabs.CheckTabClose();
 		}
-		
+
 	}
 
 	public static PlayerMoveMessage Send(GameObject recipient, GameObject subjectPlayer, PlayerState state)
@@ -44,15 +50,31 @@ public class PlayerMoveMessage : ServerMessage
 		return msg;
 	}
 
-	public static PlayerMoveMessage SendToAll(GameObject subjectPlayer, PlayerState state)
+	public static void SendToAll(GameObject subjectPlayer, PlayerState state)
 	{
-		var msg = new PlayerMoveMessage
+
+
+		if (PlayerUtils.IsGhost(subjectPlayer))
 		{
-			SubjectPlayer = subjectPlayer != null ? subjectPlayer.GetComponent<NetworkIdentity>().netId : NetworkInstanceId.Invalid,
-			State = state,
-		};
-		msg.SendToAll();
-		return msg;
+			//Send ghost positions only to ghosts
+			foreach (var connectedPlayer in PlayerList.Instance.InGamePlayers)
+			{
+				if (PlayerUtils.IsGhost(connectedPlayer.GameObject))
+				{
+					Send(connectedPlayer.GameObject, subjectPlayer, state);
+				}
+			}
+		}
+		else
+		{
+			var msg = new PlayerMoveMessage
+			{
+				SubjectPlayer = subjectPlayer != null ? subjectPlayer.GetComponent<NetworkIdentity>().netId : NetworkInstanceId.Invalid,
+				State = state,
+			};
+			msg.SendToAll();
+		}
+
 	}
 
 	public override string ToString()

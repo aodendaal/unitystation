@@ -1,188 +1,343 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
+[ExecuteInEditMode]
+public class MetaTileMap : MonoBehaviour
+{
+	/// <summary>
+	/// Use this dictionary only if performance isn't critical, otherwise try using arrays below
+	/// </summary>
+	public Dictionary<LayerType, Layer> Layers { get; private set; }
 
-	[ExecuteInEditMode]
-	public class MetaTileMap : MonoBehaviour
+	//Using arrays for iteration speed
+	private LayerType[] LayersKeys { get; set; }
+	private Layer[] LayersValues { get; set; }
+	/// <summary>
+	/// Array of only layers that can ever contain solid stuff
+	/// </summary>
+	private Layer[] SolidLayersValues { get; set; }
+
+	private void OnEnable()
 	{
-		public Dictionary<LayerType, Layer> Layers { get; private set; }
+		Layers = new Dictionary<LayerType, Layer>();
+		var layersKeys = new List<LayerType>();
+		var layersValues = new List<Layer>();
+		var solidLayersValues = new List<Layer>();
 
-		private void OnEnable()
+		foreach (Layer layer in GetComponentsInChildren<Layer>(true))
 		{
-			Layers = new Dictionary<LayerType, Layer>();
-
-			foreach (Layer layer in GetComponentsInChildren<Layer>(true))
+			var type = layer.LayerType;
+			Layers[type] = layer;
+			layersKeys.Add(type);
+			layersValues.Add(layer);
+			if ( type != LayerType.Effects
+			  && type != LayerType.Base
+			  && type != LayerType.Floors
+			  && type != LayerType.None)
 			{
-				Layers[layer.LayerType] = layer;
+				solidLayersValues.Add(layer);
 			}
 		}
 
-		public bool IsPassableAt(Vector3Int origin, Vector3Int to)
+		LayersKeys = layersKeys.ToArray();
+		LayersValues = layersValues.ToArray();
+		SolidLayersValues = solidLayersValues.ToArray();
+	}
+
+	public bool IsPassableAt(Vector3Int position)
+	{
+		return IsPassableAt(position, position);
+	}
+
+	public bool IsPassableAt(Vector3Int origin, Vector3Int to, bool inclPlayers = true, GameObject context = null)
+	{
+		Vector3Int toX = new Vector3Int(to.x, origin.y, origin.z);
+		Vector3Int toY = new Vector3Int(origin.x, to.y, origin.z);
+
+		return _IsPassableAt(origin, toX, inclPlayers, context) && _IsPassableAt(toX, to, inclPlayers, context) ||
+		       _IsPassableAt(origin, toY, inclPlayers, context) && _IsPassableAt(toY, to, inclPlayers, context);
+	}
+
+	private bool _IsPassableAt(Vector3Int origin, Vector3Int to, bool inclPlayers = true, GameObject context = null)
+	{
+		for (var i = 0; i < SolidLayersValues.Length; i++)
 		{
-			Vector3Int toX = new Vector3Int(to.x, origin.y, origin.z);
-			Vector3Int toY = new Vector3Int(origin.x, to.y, origin.z);
-			
-			return _IsPassableAt(origin, toX) && _IsPassableAt(toX, to) || 
-			        _IsPassableAt(origin, toY) && _IsPassableAt(toY, to);
+			if (!SolidLayersValues[i].IsPassableAt(origin, to, inclPlayers, context))
+			{
+				return false;
+			}
 		}
 
-		private bool _IsPassableAt(Vector3Int origin, Vector3Int to)
+		return true;
+	}
+
+	public bool IsAtmosPassableAt(Vector3Int position)
+	{
+		return IsAtmosPassableAt(position, position);
+	}
+
+	public bool IsAtmosPassableAt(Vector3Int origin, Vector3Int to)
+	{
+		Vector3Int toX = new Vector3Int(to.x, origin.y, origin.z);
+		Vector3Int toY = new Vector3Int(origin.x, to.y, origin.z);
+
+		return _IsAtmosPassableAt(origin, toX) && _IsAtmosPassableAt(toX, to) ||
+		       _IsAtmosPassableAt(origin, toY) && _IsAtmosPassableAt(toY, to);
+	}
+
+	private bool _IsAtmosPassableAt(Vector3Int origin, Vector3Int to)
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
 		{
-			foreach (Layer layer in Layers.Values)
+			if (!LayersValues[i].IsAtmosPassableAt(origin, to))
 			{
-				if (!layer.IsPassableAt(origin, to))
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public bool IsSpaceAt(Vector3Int position)
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
+		{
+			if (!LayersValues[i].IsSpaceAt(position))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	public void SetTile(Vector3Int position, LayerTile tile, Matrix4x4 transformMatrix)
+	{
+		Layers[tile.LayerType].SetTile(position, tile, transformMatrix);
+	}
+
+	public void SetTile(Vector3Int position, LayerTile tile)
+	{
+		Layers[tile.LayerType].SetTile(position, tile, Matrix4x4.identity);
+	}
+
+	public LayerTile GetTile(Vector3Int position, LayerType layerType)
+	{
+		Layer layer = null;
+		Layers.TryGetValue(layerType, out layer);
+		return layer ? Layers[layerType].GetTile(position) : null;
+	}
+
+	public LayerTile GetTile(Vector3Int position)
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
+		{
+			LayerTile tile = LayersValues[i].GetTile(position);
+			if (tile != null)
+			{
+				return tile;
+			}
+		}
+
+		return null;
+	}
+
+	public bool IsEmptyAt(Vector3Int position)
+	{
+		for (var index = 0; index < LayersKeys.Length; index++)
+		{
+			LayerType layer = LayersKeys[index];
+			if (layer != LayerType.Objects && HasTile(position, layer))
+			{
+				return false;
+			}
+
+			if (layer == LayerType.Objects)
+			{
+				var objects = ((ObjectLayer) LayersValues[index]).Objects.Get(position);
+				for (var i = 0; i < objects.Count; i++)
 				{
-					return false;
+					RegisterTile o = objects[i];
+					if (!o.IsPassable())
+					{
+						return false;
+					}
 				}
 			}
-
-			return true;
 		}
-		
-		//TODO:  Remove this
-		public bool IsPassableAt(Vector3Int position)
+
+		return true;
+	}
+
+	public bool IsNoGravityAt(Vector3Int position)
+	{
+		for (var i = 0; i < LayersKeys.Length; i++)
 		{
-			foreach (Layer layer in Layers.Values)
+			LayerType layer = LayersKeys[i];
+			if (layer != LayerType.Objects && HasTile(position, layer))
 			{
-				if (!layer.IsPassableAt(position))
-				{
-					return false;
-				}
+				return false;
 			}
-			
-			return true;
-		}
-		
-		//TODO:  Refactor to take origin and destination
-		public bool IsAtmosPassableAt(Vector3Int position)
-		{
-			foreach (Layer layer in Layers.Values)
+			if (layer == LayerType.Objects)
 			{
-				if (!layer.IsAtmosPassableAt(position))
+				var objects = ((ObjectLayer) LayersValues[i]).Objects.Get(position);
+				for (var j = 0; j < objects.Count; j++)
 				{
-					return false;
-				}
-			}
-			return true;
-		}
-
-		public bool IsSpaceAt(Vector3Int position)
-		{
-			foreach (Layer layer in Layers.Values)
-			{
-				if (!layer.IsSpaceAt(position))
-				{
-					return false;
-				}
-			}
-			return true;
-		}
-
-		public void SetTile(Vector3Int position, LayerTile tile, Matrix4x4 transformMatrix)
-		{
-			Layers[tile.LayerType].SetTile(position, tile, transformMatrix);
-		}
-
-		public LayerTile GetTile(Vector3Int position, LayerType layerType)
-		{
-			Layer layer = null;
-			Layers.TryGetValue(layerType, out layer);
-			return layer ? Layers[layerType].GetTile(position) : null;
-		}
-
-		public LayerTile GetTile(Vector3Int position)
-		{
-			foreach (Layer layer in Layers.Values)
-			{
-				LayerTile tile = layer.GetTile(position);
-				if (tile != null)
-				{
-					return tile;
-				}
-			}
-
-			return null;
-		}
-
-		public bool IsEmptyAt(Vector3Int position)
-		{
-			foreach (LayerType layer in Layers.Keys)
-			{
-				if (layer != LayerType.Objects && HasTile(position, layer))
-				{
-					return false;
-				}
-			}
-			return true;
-		}
-
-		public bool HasTile(Vector3Int position, LayerType layerType)
-		{
-			return Layers[layerType].HasTile(position);
-		}
-
-		public void RemoveTile(Vector3Int position, LayerType refLayer)
-		{
-			foreach (Layer layer in Layers.Values)
-			{
-				if (layer.LayerType < refLayer &&
-				    !(refLayer == LayerType.Objects && 
-					layer.LayerType == LayerType.Floors) &&
-					refLayer != LayerType.Grills)
-				{
-					layer.RemoveTile(position);
+					RegisterTile o = objects[j];
+					if ( o is RegisterObject )
+					{
+						PushPull pushPull = o.GetComponent<PushPull>();
+						if ( !pushPull || pushPull.isNotPushable )
+						{
+							return false;
+						}
+					}
 				}
 			}
 		}
 
-		public void ClearAllTiles()
+		return true;
+	}
+
+	public bool IsEmptyAt(GameObject[] context, Vector3Int position)
+	{
+		for (var i1 = 0; i1 < LayersKeys.Length; i1++)
 		{
-			foreach (Layer layer in Layers.Values)
+			LayerType layer = LayersKeys[i1];
+			if (layer != LayerType.Objects && HasTile(position, layer))
 			{
-				layer.ClearAllTiles();
+				return false;
+			}
+
+			if (layer == LayerType.Objects)
+			{
+				var objects = ((ObjectLayer) LayersValues[i1]).Objects.Get(position);
+				for (var i = 0; i < objects.Count; i++)
+				{
+					RegisterTile o = objects[i];
+					if (!o.IsPassable())
+					{
+						bool isExcluded = false;
+						for (var index = 0; index < context.Length; index++)
+						{
+							if (o.gameObject == context[index])
+							{
+								isExcluded = true;
+								break;
+							}
+						}
+
+						if (!isExcluded)
+						{
+							return false;
+						}
+					}
+				}
 			}
 		}
 
-		public BoundsInt GetBounds()
+		return true;
+	}
+
+	/// <summary>
+	/// Cheap method to check if there's a tile
+	/// </summary>
+	/// <param name="position"></param>
+	/// <returns></returns>
+	public bool HasTile(Vector3Int position)
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
 		{
-			Vector3Int minPosition = Vector3Int.one * int.MaxValue;
-			Vector3Int maxPosition = Vector3Int.one * int.MinValue;
-
-			foreach (Layer layer in Layers.Values)
+			if (LayersValues[i].HasTile(position))
 			{
-				BoundsInt layerBounds = layer.Bounds;
-
-				minPosition = Vector3Int.Min(layerBounds.min, minPosition);
-				maxPosition = Vector3Int.Max(layerBounds.max, maxPosition);
+				return true;
 			}
-			
-			return new BoundsInt(minPosition, maxPosition-minPosition);
 		}
-		
+		return false;
+	}
+	public bool HasTile(Vector3Int position, LayerType layerType)
+	{
+		return Layers[layerType].HasTile(position);
+	}
+
+	public void RemoveTile(Vector3Int position, LayerType refLayer)
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
+		{
+			Layer layer = LayersValues[i];
+			if (layer.LayerType < refLayer &&
+			    !(refLayer == LayerType.Objects &&
+			      layer.LayerType == LayerType.Floors) &&
+			    refLayer != LayerType.Grills)
+			{
+				layer.RemoveTile(position);
+			}
+		}
+	}
+
+	public void RemoveTile(Vector3Int position, LayerType refLayer, bool removeAll = false)
+	{
+		Layers[refLayer].RemoveTile(position, removeAll);
+	}
+
+	public void ClearAllTiles()
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
+		{
+			LayersValues[i].ClearAllTiles();
+		}
+	}
+
+	public BoundsInt GetBounds()
+	{
+		Vector3Int minPosition = Vector3Int.one * int.MaxValue;
+		Vector3Int maxPosition = Vector3Int.one * int.MinValue;
+
+		for (var i = 0; i < LayersValues.Length; i++)
+		{
+			BoundsInt layerBounds = LayersValues[i].Bounds;
+
+			minPosition = Vector3Int.Min(layerBounds.min, minPosition);
+			maxPosition = Vector3Int.Max(layerBounds.max, maxPosition);
+		}
+
+		return new BoundsInt(minPosition, maxPosition - minPosition);
+	}
+
+	public Vector3Int WorldToCell(Vector3 worldPosition)
+	{
+		return Layers.First().Value.WorldToCell(worldPosition);
+	}
+
 
 #if UNITY_EDITOR
-		public void SetPreviewTile(Vector3Int position, LayerTile tile, Matrix4x4 transformMatrix)
+	public void SetPreviewTile(Vector3Int position, LayerTile tile, Matrix4x4 transformMatrix)
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
 		{
-			foreach (Layer layer in Layers.Values)
+			Layer layer = LayersValues[i];
+			if (layer.LayerType < tile.LayerType)
 			{
-				if (layer.LayerType < tile.LayerType)
-				{
-					Layers[layer.LayerType].SetPreviewTile(position, LayerTile.EmptyTile, Matrix4x4.identity);
-				}
+				Layers[layer.LayerType].SetPreviewTile(position, LayerTile.EmptyTile, Matrix4x4.identity);
 			}
-			if(!Layers.ContainsKey(tile.LayerType)){
-				Debug.LogError($"LAYER TYPE: {tile.LayerType} not found!");
-				return;
-			}
-			Layers[tile.LayerType].SetPreviewTile(position, tile, transformMatrix);
 		}
 
-		public void ClearPreview()
+		if (!Layers.ContainsKey(tile.LayerType))
 		{
-			foreach (Layer layer in Layers.Values)
-			{
-				layer.ClearPreview();
-			}
+			Debug.LogError($"LAYER TYPE: {tile.LayerType} not found!");
+			return;
 		}
-#endif
+
+		Layers[tile.LayerType].SetPreviewTile(position, tile, transformMatrix);
 	}
+
+	public void ClearPreview()
+	{
+		for (var i = 0; i < LayersValues.Length; i++)
+		{
+			LayersValues[i].ClearPreview();
+		}
+	}
+#endif
+}

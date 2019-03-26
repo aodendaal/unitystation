@@ -30,7 +30,7 @@ public class ShipThruster : MonoBehaviour
 		}
 		shipMatrixMove.OnStart.RemoveListener(UpdateEngineState);
 		shipMatrixMove.OnStop.RemoveListener(UpdateEngineState);
-		shipMatrixMove.OnRotate.RemoveListener(RotateFX);
+		shipMatrixMove.OnRotateStart.RemoveListener(RotateFX);
 		shipMatrixMove.OnSpeedChange.RemoveListener(SpeedChange);
 	}
 
@@ -51,7 +51,7 @@ public class ShipThruster : MonoBehaviour
 		yield return new WaitForEndOfFrame();
 		shipMatrixMove.OnStart.AddListener(UpdateEngineState);
 		shipMatrixMove.OnStop.AddListener(UpdateEngineState);
-		shipMatrixMove.OnRotate.AddListener(RotateFX);
+		shipMatrixMove.OnRotateStart.AddListener(RotateFX);
 		shipMatrixMove.OnSpeedChange.AddListener(SpeedChange);
 	}
 
@@ -70,11 +70,11 @@ public class ShipThruster : MonoBehaviour
 	}
 
 	//Rotates FX as ship rotates
-	public void RotateFX(Orientation oldOrientation, Orientation newOrientation)
+	public void RotateFX(RotationOffset newRotationOffset, bool isInitialRotation)
 	{
 		var mainFX = particleFX.main;
 
-		mainFX.startRotation = newOrientation.Degree * Mathf.Deg2Rad;
+		mainFX.startRotation = newRotationOffset.Degree * Mathf.Deg2Rad;
 	}
 
 	public void SpeedChange(float oldSpeed, float newSpeed, float _particleSpeedMultiplier)

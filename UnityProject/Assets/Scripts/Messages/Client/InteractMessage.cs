@@ -11,14 +11,21 @@ public class InteractMessage : ClientMessage
 	public byte Hand;
 	public Vector3 Position;
 	public NetworkInstanceId Subject;
+	public bool UITrigger;
 
 	public override IEnumerator Process()
 	{
-//		Logger.Log("Processed " + ToString());
+		//		Logger.Log("Processed " + ToString());
 
-		yield return WaitFor(Subject, SentBy);
-
-		NetworkObjects[0].GetComponent<InputTrigger>().Interact(NetworkObjects[1], Position, decodeHand(Hand));
+		yield return WaitFor(Subject);
+		if (!UITrigger)
+		{
+			NetworkObject.GetComponent<InputTrigger>().Interact(SentByPlayer.GameObject, Position, decodeHand(Hand));
+		}
+		else
+		{
+			NetworkObject.GetComponent<InputTrigger>().UI_Interact(SentByPlayer.GameObject, decodeHand(Hand));
+		}
 	}
 
 	/// <summary>
@@ -29,13 +36,27 @@ public class InteractMessage : ClientMessage
 		return Send(subject, subject.transform.position, hand);
 	}
 
+	public static InteractMessage Send(GameObject subject, string hand, bool UITrigger)
+	{
+		InteractMessage msg = new InteractMessage
+		{
+			Subject = subject.GetComponent<NetworkIdentity>().netId,
+				Position = subject.transform.position,
+				Hand = encodeHand(hand),
+				UITrigger = true
+		};
+		msg.Send();
+		//		InputTrigger.msgCache[msg.Subject] = Time.time;
+		return msg;
+	}
+
 	public static InteractMessage Send(GameObject subject, Vector3 position, string hand)
 	{
 		InteractMessage msg = new InteractMessage
 		{
 			Subject = subject.GetComponent<NetworkIdentity>().netId,
-			Position = position,
-			Hand = encodeHand(hand)
+				Position = position,
+				Hand = encodeHand(hand)
 		};
 		msg.Send();
 		//		InputTrigger.msgCache[msg.Subject] = Time.time;
@@ -71,7 +92,7 @@ public class InteractMessage : ClientMessage
 
 	public override string ToString()
 	{
-		return $"[InteractMessage Subject={Subject} Hand={decodeHand( Hand )} Type={MessageType} SentBy={SentBy}]";
+		return $"[InteractMessage Subject={Subject} Hand={decodeHand( Hand )} Type={MessageType} SentBy={SentByPlayer}]";
 	}
 
 	public override void Deserialize(NetworkReader reader)
@@ -80,6 +101,7 @@ public class InteractMessage : ClientMessage
 		Hand = reader.ReadByte();
 		Position = reader.ReadVector3();
 		Subject = reader.ReadNetworkId();
+		UITrigger = reader.ReadBoolean();
 	}
 
 	public override void Serialize(NetworkWriter writer)
@@ -88,5 +110,6 @@ public class InteractMessage : ClientMessage
 		writer.Write(Hand);
 		writer.Write(Position);
 		writer.Write(Subject);
+		writer.Write(UITrigger);
 	}
 }

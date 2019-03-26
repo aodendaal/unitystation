@@ -2,44 +2,47 @@
 using UnityEngine.Networking;
 
 
-	public class ClosetHealthBehaviour : HealthBehaviour
+	public class ClosetHealthBehaviour : NetworkBehaviour
 	{
 		private ClosetControl closetControl;
 		private Collider2D[] colliders;
-		private PushPull objectActions;
+//		private PushPull objectActions;
 		private RegisterCloset registerTile;
 
 		private void Awake()
 		{
 			colliders = GetComponents<Collider2D>();
 			registerTile = GetComponent<RegisterCloset>();
-			objectActions = GetComponent<PushPull>();
+//			objectActions = GetComponent<PushPull>();
 			closetControl = GetComponent<ClosetControl>();
 		}
 
-		protected override void OnDeathActions()
-		{
-			if (isServer)
-			{
-				ServerDeathActions();
-			}
-		}
+		//FIXME: this class no longer derives from LivingHealthBehaviour as it is not
+		// a living thing. A new damage system is required for non living objects
 
-		[Server]
-		private void ServerDeathActions()
-		{
-			//            disableInteraction();
-			openCloset();
-			RpcClientDeathActions();
-		}
+		// protected override void OnDeathActions()
+		// {
+		// 	if (isServer)
+		// 	{
+		// 		ServerDeathActions();
+		// 	}
+		// }
 
-		[ClientRpc]
-		private void RpcClientDeathActions()
-		{
-			disableInteraction(); //todo: refactor to use interaction bool w/ server validations
-			playDeathSound();
-			rotateSprites();
-		}
+		// [Server]
+		// private void ServerDeathActions()
+		// {
+		// 	//            disableInteraction();
+		// 	openCloset();
+		// 	RpcClientDeathActions();
+		// }
+
+		// [ClientRpc]
+		// private void RpcClientDeathActions()
+		// {
+		// 	disableInteraction(); //todo: refactor to use interaction bool w/ server validations
+		// 	playDeathSound();
+		// 	rotateSprites();
+		// }
 
 		private void disableInteraction()
 		{
@@ -48,10 +51,10 @@ using UnityEngine.Networking;
 				colliders[i].enabled = false;
 			}
 
-			objectActions.BreakPull();
+//			objectActions.BreakPull();
 			registerTile.IsClosed = false;
-			objectActions.allowedToMove = false;
-			objectActions.isPushable = false;
+//			objectActions.allowedToMove = false;
+//			objectActions.isPushable = false;
 		}
 
 		private void playDeathSound()

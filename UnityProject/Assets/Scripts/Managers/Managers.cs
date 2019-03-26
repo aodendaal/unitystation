@@ -6,8 +6,6 @@ public class Managers : MonoBehaviour
 {
 	public static Managers instance;
 
-	public GameObject hostToggle;
-
 	public string serverIP;
 	[Header("For turning UI on and off to free up the editor window")] public GameObject UIParent;
 
@@ -27,10 +25,6 @@ public class Managers : MonoBehaviour
 	{
 		Application.runInBackground = true;
 		DontDestroyOnLoad(gameObject);
-		if (BuildPreferences.isForRelease)
-		{
-			hostToggle.SetActive(false);
-		}
 	}
 
 	public async void SetScreenForGame()
@@ -40,6 +34,8 @@ public class Managers : MonoBehaviour
 		UIManager.Display.SetScreenForGame();
 
 		await Task.Delay(3000); //Wait a decent amount of time for startup of the scene (3s)
+
+		Instantiate (Resources.Load ("UI/GUI/Right click canvas"));
 		if (CustomNetworkManager.Instance._isServer)
 		{
 			//Spawn the ProgressBar handler:

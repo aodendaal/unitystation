@@ -7,34 +7,36 @@ using Random = UnityEngine.Random;
 [Flags]
 public enum ChatChannel
 {
-	[Description("")] 	None = 0,
-	[Description("")] 	Examine = 1,
-	[Description("")] 	Local = 2,
-	[Description("")] 	OOC = 4,
-	[Description("")] 	Common = 8,
-	[Description(":b")] Binary = 16,
-	[Description(":u")] Supply = 32,
-	[Description(":y")] CentComm = 64,
-	[Description(":c")] Command = 128,
-	[Description(":e")] Engineering = 256,
-	[Description(":m")] Medical = 512,
-	[Description(":n")] Science = 1024,
-	[Description(":s")] Security = 2048,
-	[Description(":v")] Service = 4096,
-	[Description(":t")] Syndicate = 8192,
-	[Description("")] 	System = 16384,
-	[Description(":g")] Ghost = 32768,
-	[Description("")] 	Combat = 65536
+	[Description("")] 	None 		= 0,
+	[Description("")] 	Examine 	= 1 << 0,
+	[Description("")] 	Local 		= 1 << 1,
+	[Description("")] 	OOC 		= 1 << 2,
+	[Description("")] 	Common 		= 1 << 3,
+	[Description(":b")] Binary 		= 1 << 4,
+	[Description(":u")] Supply 		= 1 << 5,
+	[Description(":y")] CentComm 	= 1 << 6,
+	[Description(":c")] Command 	= 1 << 7,
+	[Description(":e")] Engineering = 1 << 8,
+	[Description(":m")] Medical 	= 1 << 9,
+	[Description(":n")] Science 	= 1 << 10,
+	[Description(":s")] Security 	= 1 << 11,
+	[Description(":v")] Service 	= 1 << 12,
+	[Description(":t")] Syndicate 	= 1 << 13,
+	[Description("")] 	System 		= 1 << 14,
+	[Description(":g")] Ghost 		= 1 << 15,
+	[Description("")] 	Combat 		= 1 << 16
 }
 
 [Flags]
 public enum ChatModifier
 {
-	None = 0,
-	Drunk = 1,
-	Stutter = 2,
-	Hiss = 4,
-	Clown = 8
+	None 	= 0,
+	Drunk 	= 1 << 0,
+	Stutter = 1 << 1,
+	Mute 	= 1 << 2,
+	Hiss 	= 1 << 3,
+	Clown 	= 1 << 4,
+	Whisper = 1 << 5,
 }
 
 public class ChatEvent
@@ -52,13 +54,13 @@ public class ChatEvent
 		timestamp = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds;
 	}
 
-	public ChatEvent(string message, GameObject speaker, ChatChannel channels)
+	public ChatEvent(string message, ConnectedPlayer speaker, ChatChannel channels)
 	{
-		var player = speaker.Player();
+		var player = speaker.Script;
 		this.channels = channels;
-		this.modifiers = player.Script.GetCurrentChatModifiers();
-		this.speaker = player?.Name;
-		this.position = ( Vector2 ) player?.GameObject.transform.position;
+		this.modifiers = player.GetCurrentChatModifiers();
+		this.speaker = player.name;
+		this.position = ( Vector2 ) player.gameObject.transform.position;
 		this.message = ProcessMessage(message, this.speaker, this.channels, modifiers);
 	}
 
@@ -139,6 +141,11 @@ public class ChatEvent
 		}
 
 		message = ApplyModifiers(message, modifiers);
+		if (message.Length < 1)
+		{
+			// if message + modifiers leads to no text, do not display
+			this.channels = ChatChannel.None;
+		}
 		message = "<b>" + speaker + "</b> says: \"" + message + "\"";
 
 		return message;
@@ -205,11 +212,24 @@ public class ChatEvent
 				output = output + " ...hic!...";
 			}
 		}
+		if ((modifiers & ChatModifier.Whisper) == ChatModifier.Whisper)
+		{
+			//If user is in barely conscious state, make text italic
+			//todo: decrease range and modify text somehow
+			//This can be changed later to other status effects
+			output = "<i>"+output+"</i>";
+		}
+		if ((modifiers & ChatModifier.Mute) == ChatModifier.Mute)
+		{
+			//If user is in unconscious state remove text
+			//This can be changed later to other status effects
+			output = "";
+		}
 
 		return output;
 	}
 
-	#region Match Evaluators - contains the methods for string replacement magic  
+	#region Match Evaluators - contains the methods for string replacement magic
 
 	private static string Slur(Match m)
 	{

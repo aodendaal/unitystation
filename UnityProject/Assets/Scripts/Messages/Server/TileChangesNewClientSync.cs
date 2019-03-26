@@ -20,8 +20,8 @@ public class TileChangesNewClientSync : ServerMessage
 	public static TileChangesNewClientSync Send(GameObject managerSubject, GameObject recipient, string jsondata)
 	{
 		TileChangesNewClientSync msg =
-			new TileChangesNewClientSync 
-			{ManagerSubject = managerSubject.GetComponent<NetworkIdentity>().netId, 
+			new TileChangesNewClientSync
+			{ManagerSubject = managerSubject.GetComponent<NetworkIdentity>().netId,
 			data = jsondata
 			};
 

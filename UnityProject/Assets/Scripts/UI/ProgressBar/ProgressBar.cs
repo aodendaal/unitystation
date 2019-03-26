@@ -43,7 +43,7 @@ public class ProgressBar : NetworkBehaviour
 				position = pos,
 				playerSprites = _playerSprites,
 				playerPositionCache = _player.transform.position,
-				facingDirectionCache = _playerSprites.currentDirection,
+				facingDirectionCache = _playerSprites.CurrentDirection,
 				additionalSfx = _additionalSfx,
 				additionalSfxPitch = _additionalSfxPitch
 		});
@@ -141,7 +141,7 @@ public class PlayerProgressEntry
 	//has the player moved away while the progress bar is in progress?
 	public bool HasMovedAway()
 	{
-		if (playerSprites.currentDirection != facingDirectionCache ||
+		if (playerSprites.CurrentDirection != facingDirectionCache ||
 			player.transform.position != playerPositionCache)
 		{
 			return true;
@@ -153,7 +153,7 @@ public class PlayerProgressEntry
 	{
 		if (!string.IsNullOrEmpty(additionalSfx))
 		{
-			PlaySoundMessage.SendToAll(additionalSfx, position, additionalSfxPitch);
+			SoundManager.PlayNetworkedAtPos(additionalSfx, position, additionalSfxPitch);
 		}
 	}
 }
@@ -164,21 +164,23 @@ public class FinishProgressAction
 	{
 		TileConstruction,
 		TileDeconstruction,
+		CleanTile,
 		//Add whatever else you need here
 	}
 
-	private FinishProgressAction.Action actionType;
+	private Action actionType;
 
 	//Tile change stuff:
 	private TileChangeManager tileChangeManager;
 	private TileType tileType;
 	private Vector3 cellPos;
 	private Vector3 worldPos; //worldPos of the action or tile
+	private MopTrigger theMop;
 
 	private GameObject originator;
 
 	//Create a constructor for each new use type of FinishProgressAction (i.e you might add an Action type called HandCuff)
-	public FinishProgressAction(FinishProgressAction.Action action, TileChangeManager _tileChangeManager,
+	public FinishProgressAction(Action action, TileChangeManager _tileChangeManager,
 		TileType _tileType, Vector3 _cellPos, Vector3 _worldPos, GameObject _originator)
 	{
 		actionType = action;
@@ -188,7 +190,12 @@ public class FinishProgressAction
 		worldPos = _worldPos;
 		originator = _originator;
 	}
-
+	public FinishProgressAction(FinishProgressAction.Action cleanTile, Vector3 splatsPos, MopTrigger mop)
+	{
+		actionType = cleanTile;
+		worldPos = splatsPos;
+		theMop = mop;
+	}
 	public void DoAction()
 	{
 		switch (actionType)
@@ -198,6 +205,9 @@ public class FinishProgressAction
 				break;
 			case Action.TileDeconstruction:
 				DoTileDeconstruction();
+				break;
+			case Action.CleanTile:
+				DoCleanTile();
 				break;
 		}
 	}
@@ -211,5 +221,10 @@ public class FinishProgressAction
 	{
 		CraftingManager.Deconstruction.TryTileDeconstruct(
 			tileChangeManager, tileType, cellPos, worldPos);
+	}
+
+	private void DoCleanTile()
+	{
+		theMop.CleanTile(worldPos);
 	}
 }

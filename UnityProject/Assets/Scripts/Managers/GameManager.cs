@@ -1,9 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using System.Globalization;
 
 public class GameManager : MonoBehaviour
 {
@@ -11,25 +14,23 @@ public class GameManager : MonoBehaviour
 
 	//TODO: How to network this and change before connecting:
 	public GameMode gameMode = GameMode.nukeops; //for demo
-	public float RoundTime = 660f; //10 minutes nuke ops time + 1 minute shuttle escape, might have to adjust this in future with other modes.
 	public bool counting;
 	public List<GameObject> Occupations = new List<GameObject>();
 	public float restartTime = 10f;
 	/// <summary>
 	/// Set on server if Respawn is Allowed
 	/// </summary>
-	public bool RespawnAllowed = true;
+	public bool RespawnAllowed = false;
 
 	public Text roundTimer;
 
 	public GameObject StandardOutfit;
 	public bool waitForRestart;
 
-	public float GetRoundTime { get; private set; } = 660f;
-
+	public DateTime stationTime;
 	public int RoundsPerMap = 10;
 
-	public string[] Maps = { "Assets/scenes/OutpostDeathmatch.unity" };
+	public string[] Maps = { "Assets/scenes/OutpostStation.unity" };
 	//Put the scenes in the unity 3d editor.
 
 	private int MapRotationCount = 0;
@@ -37,10 +38,21 @@ public class GameManager : MonoBehaviour
 
 	private bool shuttleArrivalBroadcasted = false;
 
-	//Nuke ops:
 	public bool shuttleArrived = false;
 
 	public bool GameOver = false;
+
+	//Space bodies in the solar system <Only populated ServerSide>:
+	//---------------------------------
+	public List<MatrixMove> SpaceBodies = new List<MatrixMove>();
+	private Queue<MatrixMove> PendingSpaceBodies = new Queue<MatrixMove>();
+	private bool isProcessingSpaceBody = false;
+	public float minDistanceBetweenSpaceBodies = 200f;
+	[Header("Define the default size of all SolarSystems here:")]
+	public float solarSystemRadius = 600f;
+	//---------------------------------
+
+	public CentComm CentComm;
 
 	private void Awake()
 	{
@@ -64,7 +76,63 @@ public class GameManager : MonoBehaviour
 		SceneManager.sceneLoaded -= OnLevelFinishedLoading;
 	}
 
-	//	private void OnValidate() 
+	///<summary>
+	/// This is for any space object that needs to be randomly placed in the solar system
+	/// (See Asteroid.cs for example of use)
+	/// Please make sure matrixMove.State.position != TransformState.HiddenPos when calling this function
+	///</summary>
+	public void ServerSetSpaceBody(MatrixMove mm)
+	{
+		if (mm.State.Position == TransformState.HiddenPos)
+		{
+			Logger.LogError("Matrix Move is not initialized! Wait for it to be" +
+				"ready before calling ServerSetSpaceBody ");
+			return;
+		}
+
+		PendingSpaceBodies.Enqueue(mm);
+	}
+
+	IEnumerator ProcessSpaceBody(MatrixMove mm)
+	{
+		bool validPos = false;
+		while (!validPos)
+		{
+			Vector3 proposedPosition = RandomPositionInSolarSystem();
+			bool failedChecks = false;
+			//Make sure it is away from the middle of space matrix
+			if (Vector3.Distance(proposedPosition,
+					MatrixManager.Instance.spaceMatrix.transform.parent.transform.position) <
+				minDistanceBetweenSpaceBodies)
+			{
+				failedChecks = true;
+			}
+
+			for (int i = 0; i < SpaceBodies.Count; i++)
+			{
+				if (Vector3.Distance(proposedPosition, SpaceBodies[i].transform.position) < minDistanceBetweenSpaceBodies)
+				{
+					failedChecks = true;
+				}
+			}
+			if (!failedChecks)
+			{
+				validPos = true;
+				mm.SetPosition(proposedPosition);
+				SpaceBodies.Add(mm);
+			}
+			yield return YieldHelper.EndOfFrame;
+		}
+		yield return YieldHelper.EndOfFrame;
+		isProcessingSpaceBody = false;
+	}
+
+	public Vector3 RandomPositionInSolarSystem()
+	{
+		return UnityEngine.Random.insideUnitCircle * solarSystemRadius;
+	}
+
+	//	private void OnValidate()
 	//	{
 	//		if (Occupations.All(o => o.GetComponent<OccupationRoster>().Type != JobType.ASSISTANT)) //wtf is that about
 	//		{
@@ -74,9 +142,14 @@ public class GameManager : MonoBehaviour
 
 	private void OnLevelFinishedLoading(Scene scene, LoadSceneMode mode)
 	{
-		GetRoundTime = RoundTime;
+		if (CustomNetworkManager.Instance._isServer)
+		{
+			stationTime = DateTime.Today.AddHours(12);
+			SpaceBodies.Clear();
+			PendingSpaceBodies = new Queue<MatrixMove>();
+			counting = true;
+		}
 		GameOver = false;
-		RespawnAllowed = true;
 		// if (scene.name != "Lobby")
 		// {
 		// 	SetUpGameMode();
@@ -92,29 +165,32 @@ public class GameManager : MonoBehaviour
 	// 	}
 	// }
 
-	public void SyncTime(float currentTime)
+	public void SyncTime(string currentTime)
 	{
 		if (!CustomNetworkManager.Instance._isServer)
 		{
-			GetRoundTime = currentTime;
-			if (currentTime > 0f)
-			{
-				counting = true;
-			}
+			stationTime = DateTime.ParseExact(currentTime,"O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+			counting = true;
 		}
 	}
 
 	public void ResetRoundTime()
 	{
-		GetRoundTime = RoundTime;
+		stationTime = DateTime.Today.AddHours(12);
 		waitForRestart = false;
 		counting = true;
 		restartTime = 10f;
-		UpdateRoundTimeMessage.Send(GetRoundTime);
+		UpdateRoundTimeMessage.Send(stationTime.ToString("O"));
 	}
 
 	private void Update()
 	{
+		if (!isProcessingSpaceBody && PendingSpaceBodies.Count > 0)
+		{
+			isProcessingSpaceBody = true;
+			StartCoroutine(ProcessSpaceBody(PendingSpaceBodies.Dequeue()));
+		}
+
 		if (waitForRestart)
 		{
 
@@ -125,35 +201,36 @@ public class GameManager : MonoBehaviour
 				RestartRound();
 			}
 		}
-
 		else if (counting)
 		{
-			GetRoundTime -= Time.deltaTime;
-			roundTimer.text = Mathf.Floor(GetRoundTime / 60).ToString("00") + ":" +
-				(GetRoundTime % 60).ToString("00");
-			if (GetRoundTime <= 0f)
-			{
-				counting = false;
-				roundTimer.text = "GameOver";
+			stationTime = stationTime.AddSeconds(Time.deltaTime);
+			roundTimer.text = stationTime.ToString("HH:mm");
 
-				// Prevents annoying sound duplicate when testing
-				if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && !GameData.Instance.testServer)
-				{
-					SoundManager.Play("ApcDestroyed", 0.3f, 1f, 0f);
-				}
-
-				if (CustomNetworkManager.Instance._isServer)
-				{
-					waitForRestart = true;
-					PlayerList.Instance.ReportScores();
-				}
-			}
-			//Nuke ops shuttle arrival
 			if (shuttleArrived == true && shuttleArrivalBroadcasted == false)
 			{
 				PostToChatMessage.Send("Escape shuttle has arrived! Crew has 1 minute to get on it.", ChatChannel.System);
 				shuttleArrivalBroadcasted = true;
 			}
+		}
+	}
+
+	/// <summary>
+	/// Calls the end of the round.true Server only
+	/// </summary>
+	public void RoundEnd()
+	{
+		if (CustomNetworkManager.Instance._isServer)
+		{
+			counting = false;
+
+			// Prevents annoying sound duplicate when testing
+			if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null && !GameData.Instance.testServer)
+			{
+				SoundManager.PlayNetworked("ApcDestroyed", 1f);
+			}
+
+			waitForRestart = true;
+			PlayerList.Instance.ReportScores();
 		}
 	}
 
@@ -182,7 +259,8 @@ public class GameManager : MonoBehaviour
 		return count;
 	}
 
-	public int GetNanoTrasenCount(){
+	public int GetNanoTrasenCount()
+	{
 		if (PlayerList.Instance == null || PlayerList.Instance.ClientConnectedPlayers.Count == 0)
 		{
 			return 0;

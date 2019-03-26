@@ -5,10 +5,11 @@ using UnityEngine.UI;
 public class DamageMonitorListener : MonoBehaviour
 {
 	public BodyPartType bodyPartType;
-	private Image image;
+	[HideInInspector]
+	public Image image;
 	private Sprite initSprite;
 
-	private void Start()
+	private void Awake()
 	{
 		image = GetComponent<Image>();
 		initSprite = image.sprite;
@@ -22,10 +23,6 @@ public class DamageMonitorListener : MonoBehaviour
 	private void OnDisable()
 	{
 		SceneManager.sceneLoaded -= OnLevelFinishedLoading;
-	}
-
-	public void UpdateDamageSeverity(int severity)
-	{
 	}
 
 	//Reset healthHUD

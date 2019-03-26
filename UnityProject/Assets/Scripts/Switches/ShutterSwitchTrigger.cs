@@ -29,12 +29,12 @@ public class ShutterSwitchTrigger : InputTrigger
 		SyncShutters(IsClosed);
 	}
 
-	public override void Interact(GameObject originator, Vector3 position, string hand)
+	public override bool Interact(GameObject originator, Vector3 position, string hand)
 	{
 		if (!PlayerManager.LocalPlayerScript.IsInReach(transform.position, 1.5f) ||
-		    PlayerManager.LocalPlayerScript.playerMove.isGhost)
+		    PlayerManager.LocalPlayerScript.IsGhost)
 		{
-			return;
+			return true;
 		}
 
 		//if the button is idle and not animating it can be pressed
@@ -45,15 +45,23 @@ public class ShutterSwitchTrigger : InputTrigger
 		}
 		else
 		{
-			Logger.Log("DOOR NOT FINISHED CLOSING YET!", Category.Shutters); 
+			Logger.Log("DOOR NOT FINISHED CLOSING YET!", Category.Shutters);
 		}
+
+		return true;
 	}
 
 	private void SyncShutters(bool isClosed)
 	{
 		foreach (ObjectTrigger s in TriggeringObjects)
 		{
-			s.Trigger(isClosed);
+			if (s != null)
+			{ //Apparently unity can't handle the null reference Properly for this case
+				s.Trigger(isClosed);
+			}
+			else {
+				Logger.LogError("you Have a null reference You have a missing reference for a shutter");
+			}
 		}
 	}
 }

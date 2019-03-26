@@ -17,12 +17,16 @@ public class VisibleBehaviour : NetworkBehaviour
 	private const string customNetTransform = "CustomNetTransform";
 	private const string objectBehaviour = "ObjectBehaviour";
 	private const string regTile = "RegisterTile";
-	private const string inputController = "InputController";
+	private const string mouseInputController = "MouseInputController";
 	private const string playerSync = "PlayerSync";
 	private const string closetHandler = "ClosetPlayerHandler";
 	private const string fov = "FieldOfViewStencil";
+	private const string health = "PlayerHealth";
+	private const string healthMonitor = "HealthStateMonitor";
+	private const string blood = "BloodSystem";
+	private const string respiratory = "RespiratorySystem";
+	private const string brain = "BrainSystem";
 
-	public bool isPlayer;
 
 	private readonly string[] neverDisabled =
 	{
@@ -31,10 +35,15 @@ public class VisibleBehaviour : NetworkBehaviour
 		customNetTransform,
 		objectBehaviour,
 		regTile,
-		inputController,
+		mouseInputController,
 		playerSync,
 		closetHandler,
-		fov
+		fov,
+		health,
+		healthMonitor,
+		blood,
+		respiratory,
+		brain
 	};
 
 	public SpriteRenderer[] ignoredSpriteRenderers;
@@ -55,11 +64,6 @@ public class VisibleBehaviour : NetworkBehaviour
 	{
 		StartCoroutine(WaitForLoad());
 		base.OnStartClient();
-		PlayerScript pS = GetComponent<PlayerScript>();
-		if (pS != null)
-		{
-			isPlayer = true;
-		}
 	}
 
 	private IEnumerator WaitForLoad()
@@ -80,10 +84,7 @@ public class VisibleBehaviour : NetworkBehaviour
 
 		MonoBehaviour[] scripts = GetComponentsInChildren<MonoBehaviour>(true);
 		Collider2D[] colliders = GetComponentsInChildren<Collider2D>();
-		Renderer[] getRenderers = GetComponentsInChildren<Renderer>(true);
-		MeshRenderer[] meshRend = GetComponentsInChildren<MeshRenderer>(true);
-		//Ignore all MeshRenderers
-		Renderer[] renderers = getRenderers.Except(meshRend).ToArray();
+		Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
 
 		for (int i = 0; i < scripts.Length; i++)
 		{
@@ -141,6 +142,6 @@ public class VisibleBehaviour : NetworkBehaviour
 			Console.WriteLine(e);
 			throw;
 		}
-		
+
 	}
 }

@@ -4,13 +4,13 @@
 	[ExecuteInEditMode]
 	public class RegisterDoor : RegisterTile
 	{
-		private SystemManager systemManager;
-		
+		private SubsystemManager subsystemManager;
+
 		public bool OneDirectionRestricted;
 
 		private void Awake()
 		{
-			systemManager = GetComponentInParent<SystemManager>();
+			subsystemManager = GetComponentInParent<SubsystemManager>();
 		}
 
 		[SerializeField]
@@ -18,27 +18,35 @@
 
 		public bool IsClosed
 		{
-			get { return isClosed; }
+			get => isClosed;
 			set
 			{
 				if (isClosed != value)
 				{
 					isClosed = value;
-					systemManager.UpdateAt(Position);
+					subsystemManager.UpdateAt(Position);
 				}
 			}
 		}
 
-		public override bool IsPassable(Vector3Int to)
+		public override bool IsPassableTo( Vector3Int to )
 		{
 			if (isClosed && OneDirectionRestricted)
 			{
+				// OneDirectionRestricted is hardcoded to only be from the negative y position
 				Vector3Int v = Vector3Int.RoundToInt(transform.localRotation * Vector3.down);
 
-				return !(to - Position).Equals(v);
+				// Returns false if player is bumping door from the restricted direction
+				return !(to - Position).y.Equals(v.y);
 			}
 
 			return !isClosed;
+		}
+
+		public override bool IsPassable( Vector3Int from )
+		{
+			// Entering and leaving is the same check
+			return IsPassableTo( from );
 		}
 
 		public override bool IsPassable()
@@ -46,8 +54,17 @@
 			return !isClosed;
 		}
 
-		public override bool IsAtmosPassable()
+		public override bool IsAtmosPassable(Vector3Int from)
 		{
+			if (isClosed && OneDirectionRestricted)
+			{
+				// OneDirectionRestricted is hardcoded to only be from the negative y position
+				Vector3Int v = Vector3Int.RoundToInt(transform.localRotation * Vector3.down);
+
+				// Returns false if player is bumping door from the restricted direction
+				return !(from - Position).y.Equals(v.y);
+			}
+
 			return !isClosed;
 		}
 	}

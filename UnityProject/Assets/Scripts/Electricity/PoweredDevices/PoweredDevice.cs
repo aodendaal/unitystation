@@ -1,93 +1,81 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.Events;
+using UnityEngine.Networking;
+
+public class PoweredDevice : ElectricalOIinheritance, IElectricityIO
+{
+
+	//Renderers:
+	public SpriteRenderer NorthConnection;
+	public SpriteRenderer SouthConnection;
+	public SpriteRenderer WestConnection;
+	public SpriteRenderer EastConnection;
+
+	public RegisterObject registerTile3;
+	private Matrix matrix => registerTile3.Matrix;
+	private Vector3 posCache;
 
 
-	public class PoweredDevice : NetworkBehaviour, IElectricityIO
+	public bool IsConnector = false;
+
+
+	private bool isSupplying = false;
+
+	public void FindPossibleConnections()
 	{
-		[Header("0 = conn to wire on same tile")]
-		public int connPointA = 0;
-		public int connPointB = -1;
-
-		//The wire that is connected to this supply
-		private IElectricityIO connectedWire;
-
-		public RegisterObject registerTile;
-		private Matrix matrix => registerTile.Matrix;
-		public bool connected = false;
-		public int currentTick;
-		public float tickRate = 1f; //currently set to update every second
-		private float tickCount = 0f;
-
-		public Electricity suppliedElectricity;
-
-		//If the supply changes send an event to any action that has subscribed
-		public UnityEvent OnSupplyChange;
-
-
-		private void OnEnable()
+		Data.connections.Clear();
+		Data.connections = ElectricityFunctions.FindPossibleConnections(
+			transform.localPosition,
+			matrix,
+			InData.CanConnectTo,
+			GetConnPoints()
+		);
+		if (Data.connections.Count > 0)
 		{
-			if (OnSupplyChange == null) {
-				OnSupplyChange = new UnityEvent();
-			}
-		}
-
-		public override void OnStartClient()
-		{
-			base.OnStartClient();
-			StartCoroutine(WaitForLoad());
-		}
-
-		IEnumerator WaitForLoad()
-		{
-			yield return new WaitForSeconds(2f);
-			FindPossibleConnections();
-		}
-
-		void FindPossibleConnections()
-		{
-			var conns = matrix.GetElectricalConnections(Vector3Int.RoundToInt(transform.localPosition));
-
-			foreach (IElectricityIO io in conns) {
-
-				//Check if InputPosition and OutputPosition connect with this wire
-				if (ConnectionMap.IsConnectedToTile(GetConnPoints(), AdjDir.Overlap, io.GetConnPoints()) &&
-					io.GameObject() != gameObject) {
-					connectedWire = io;
-					connected = true;
-					break;
-				}
-			}
-		}
-
-		public void ElectricityInput(int tick, Electricity electricity)
-		{
-			if (tick > currentTick) {
-				currentTick = tick;
-				suppliedElectricity = electricity;
-				//Send event that the supply has updated
-				OnSupplyChange.Invoke();
-			}
-			//Do not pass on electricty
-		}
-
-		public void ElectricityOutput(int tick, Electricity electricity)
-		{
-			
-		}
-
-		public GameObject GameObject()
-		{
-			return gameObject;
-		}
-
-		public ConnPoint GetConnPoints()
-		{
-			ConnPoint points = new ConnPoint();
-			points.pointA = connPointA;
-			points.pointB = connPointB;
-			return points;
+			connected = true;
+			//			if (IsConnector) { //For connectors sprites
+			//				for (int i = 0; i < Data.connections.Count; i++) {
+			//					if (Data.connections [i].InData.Categorytype == 0) {
+			//					}
+			//				}
+			//			}
 		}
 	}
 
+	public override void OnStartServer()
+	{
+		base.OnStartServer();
+		//Not working for some reason:
+		registerTile3 = gameObject.GetComponent<RegisterObject>();
+		StartCoroutine(WaitForLoad());
+		posCache = transform.localPosition;
+	}
+
+	IEnumerator WaitForLoad()
+	{
+		yield return new WaitForSeconds(2f);
+		FindPossibleConnections();
+	}
+		
+
+	public override void DirectionOutput (GameObject SourceInstance)
+	{
+		int SourceInstanceID = SourceInstance.GetInstanceID();
+		Data.DownstreamCount = Data.Downstream[SourceInstanceID].Count;
+		Data.UpstreamCount = Data.Upstream[SourceInstanceID].Count;
+	}
+
+
+	public override void ElectricityOutput(float Current, GameObject SourceInstance)
+	{
+		Data.ActualCurrentChargeInWire = ElectricityFunctions.WorkOutActualNumbers(this);
+		Data.CurrentInWire = Data.ActualCurrentChargeInWire.Current;
+		Data.ActualVoltage = Data.ActualCurrentChargeInWire.Voltage;
+		Data.EstimatedResistance = Data.ActualCurrentChargeInWire.EstimatedResistant;
+	}
+	public void SetConnPoints(int DirectionEndin, int DirectionStartin)
+	{ }
+
+}

@@ -11,12 +11,15 @@ using UnityEngine.SceneManagement;
 
 public class CustomNetworkManager : NetworkManager
 {
+	public static bool IsServer => Instance._isServer;
+
 	public static CustomNetworkManager Instance;
+
 	[HideInInspector] public bool _isServer;
 	[HideInInspector] public bool spawnableListReady;
 	private Server server;
-
-
+	public GameObject humanPlayerPrefab;
+	public GameObject ghostPrefab;
 
 	private void Awake()
 	{
@@ -35,25 +38,28 @@ public class CustomNetworkManager : NetworkManager
 		customConfig = true;
 
 		SetSpawnableList();
-//		if (!IsClientConnected() && !GameData.IsHeadlessServer &&
-//		    GameData.IsInGame)
-//		{
-//			UIManager.Display.logInWindow.SetActive(true);
-//		}
+		//		if (!IsClientConnected() && !GameData.IsHeadlessServer &&
+		//		    GameData.IsInGame)
+		//		{
+		//			UIManager.Display.logInWindow.SetActive(true);
+		//		}
 
 		channels.Add(QosType.ReliableSequenced);
 		channels.Add(QosType.UnreliableFragmented);
 
-		connectionConfig.AcksType = ConnectionAcksType.Acks64;
-		connectionConfig.FragmentSize = 512;
-		connectionConfig.PacketSize = 1440;
+		ConnectionConfig config = connectionConfig;
+		config.AcksType = ConnectionAcksType.Acks64;
+		config.FragmentSize = 512;
+		config.PacketSize = 1440;
 
-		if(GameData.IsInGame && PoolManager.Instance == null){
+		if (GameData.IsInGame && PoolManager.Instance == null)
+		{
 			ObjectManager.StartPoolManager();
 		}
 
 		//Automatically host if starting up game *not* from lobby
-		if ( SceneManager.GetActiveScene().name != offlineScene ) {
+		if (SceneManager.GetActiveScene().name != offlineScene)
+		{
 			StartHost();
 		}
 	}
@@ -65,14 +71,10 @@ public class CustomNetworkManager : NetworkManager
 		NetworkIdentity[] networkObjects = Resources.LoadAll<NetworkIdentity>("");
 		foreach (NetworkIdentity netObj in networkObjects)
 		{
-			if (!netObj.gameObject.name.Contains("Player"))
-			{
-				spawnPrefabs.Add(netObj.gameObject);
-			}
+			spawnPrefabs.Add(netObj.gameObject);
 		}
 
 		string[] dirs = Directory.GetDirectories(Application.dataPath, "Resources", SearchOption.AllDirectories);
-
 
 		foreach (string dir in dirs)
 		{
@@ -91,7 +93,7 @@ public class CustomNetworkManager : NetworkManager
 		folderpath = folderpath.Substring(folderpath.IndexOf("Resources", StringComparison.Ordinal) + "Resources".Length);
 		foreach (NetworkIdentity netObj in Resources.LoadAll<NetworkIdentity>(folderpath))
 		{
-			if (!netObj.name.Contains("Player") && !spawnPrefabs.Contains(netObj.gameObject))
+			if (!spawnPrefabs.Contains(netObj.gameObject))
 			{
 				spawnPrefabs.Add(netObj.gameObject);
 			}
@@ -100,7 +102,7 @@ public class CustomNetworkManager : NetworkManager
 
 	private void OnEnable()
 	{
-		SceneManager.sceneLoaded += OnLevelFinishedLoading;
+		SceneManager.activeSceneChanged += OnLevelFinishedLoading;
 	}
 
 	private void OnDisable()
@@ -109,7 +111,7 @@ public class CustomNetworkManager : NetworkManager
 		{
 			server.Auth.OnAuthChange -= AuthChange;
 		}
-		SceneManager.sceneLoaded -= OnLevelFinishedLoading;
+		SceneManager.activeSceneChanged -= OnLevelFinishedLoading;
 	}
 
 	public override void OnStartServer()
@@ -127,9 +129,9 @@ public class CustomNetworkManager : NetworkManager
 	{
 		// init the SteamServer needed for authentication of players
 		//
-		Config.ForUnity( Application.platform.ToString() );
+		Config.ForUnity(Application.platform.ToString());
 		string path = Path.GetFullPath(".");
-		string folderName = Path.GetFileName(Path.GetDirectoryName( path ) );
+		string folderName = Path.GetFileName(Path.GetDirectoryName(path));
 		ServerInit options = new ServerInit(folderName, "Unitystation");
 		server = new Server(801140, options);
 
@@ -163,40 +165,39 @@ public class CustomNetworkManager : NetworkManager
 	public void AuthChange(ulong steamid, ulong ownerid, ServerAuth.Status status)
 	{
 		var player = PlayerList.Instance.Get(steamid);
-		if ( player == ConnectedPlayer.Invalid )
+		if (player == ConnectedPlayer.Invalid)
 		{
-			Logger.LogWarning( $"Steam gave us a {status} ticket response for unconnected id {steamid}" , Category.Steam);
+			Logger.LogWarning($"Steam gave us a {status} ticket response for unconnected id {steamid}", Category.Steam);
 			return;
 		}
 
-		if ( status == ServerAuth.Status.OK )
+		if (status == ServerAuth.Status.OK)
 		{
-			Logger.LogWarning( $"Steam gave us a 'ok' ticket response for already connected id {steamid}" , Category.Steam);
+			Logger.LogWarning($"Steam gave us a 'ok' ticket response for already connected id {steamid}", Category.Steam);
 			return;
 		}
 
-		if ( status == ServerAuth.Status.VACCheckTimedOut )
+		// Disconnect logging
+		if (status == ServerAuth.Status.VACCheckTimedOut)
 		{
+			Logger.LogWarning($"The SteamID '{steamid}' left the server. ({status})", Category.Steam);
 			return;
 		}
-
-		Kick( player, $"Steam: {status}" );
 	}
 
-	public static void Kick( ConnectedPlayer player, string raisins="4 no raisins" )
+	public static void Kick(ConnectedPlayer player, string raisins = "4 no raisins")
 	{
-		if ( !player.Connection.isConnected )
+		if (!player.Connection.isConnected)
 		{
 			Logger.Log($"Not kicking, already disconnected: {player}", Category.Connections);
 			return;
 		}
-		Logger.Log( $"Kicking {player} : {raisins}" , Category.Connections);
+		Logger.Log($"Kicking {player} : {raisins}", Category.Connections);
 		InfoWindowMessage.Send(player.GameObject, $"Kicked: {raisins}", "Kicked");
 		PostToChatMessage.Send($"Player '{player.Name}' got kicked: {raisins}", ChatChannel.System);
 		player.Connection.Disconnect();
 		player.Connection.Dispose();
 	}
-
 
 	public override void OnServerAddPlayer(NetworkConnection conn, short playerControllerId)
 	{
@@ -215,11 +216,10 @@ public class CustomNetworkManager : NetworkManager
 			StartCoroutine(WaitToSpawnPlayer(conn, playerControllerId));
 		}
 
-
 		if (_isServer)
 		{
 			//Tell them what the current round time is
-			UpdateRoundTimeMessage.Send(GameManager.Instance.GetRoundTime);
+			UpdateRoundTimeMessage.Send(GameManager.Instance.stationTime.ToString("O"));
 		}
 	}
 	private IEnumerator WaitToSpawnPlayer(NetworkConnection conn, short playerControllerId)
@@ -273,7 +273,7 @@ public class CustomNetworkManager : NetworkManager
 			Logger.LogError("The PlayerPrefab does not have a NetworkIdentity. Please add a NetworkIdentity to the player prefab.", Category.Connections);
 		}
 		else if (playerControllerId < conn.playerControllers.Count && conn.playerControllers[playerControllerId].IsValid &&
-		         conn.playerControllers[playerControllerId].gameObject != null)
+			conn.playerControllers[playerControllerId].gameObject != null)
 		{
 			if (!LogFilter.logError)
 			{
@@ -283,20 +283,21 @@ public class CustomNetworkManager : NetworkManager
 		}
 		else
 		{
-			SpawnHandler.SpawnPlayer(conn, playerControllerId);
+			SpawnHandler.SpawnViewer(conn, playerControllerId);
 		}
 	}
 
 	public override void OnClientConnect(NetworkConnection conn)
 	{
-//		if (_isServer)
-//		{
-//			//do special server wizardry here
-//			PlayerList.Instance.Add(new ConnectedPlayer
-//			{
-//				Connection = conn,
-//			});
-//		}
+		this.RegisterClientHandlers(conn);
+		//		if (_isServer)
+		//		{
+		//			//do special server wizardry here
+		//			PlayerList.Instance.Add(new ConnectedPlayer
+		//			{
+		//				Connection = conn,
+		//			});
+		//		}
 
 		if (GameData.IsInGame && PoolManager.Instance == null)
 		{
@@ -305,7 +306,6 @@ public class CustomNetworkManager : NetworkManager
 
 		//This client connecting to server, wait for the spawnable prefabs to register
 		StartCoroutine(WaitForSpawnListSetUp(conn));
-		this.RegisterClientHandlers(conn);
 	}
 
 	///Sync some position data explicitly, if it is required
@@ -314,27 +314,47 @@ public class CustomNetworkManager : NetworkManager
 	{
 		//All matrices
 		MatrixMove[] matrices = FindObjectsOfType<MatrixMove>();
-		for (var i = 0; i < matrices.Length; i++) {
+		for (var i = 0; i < matrices.Length; i++)
+		{
 			matrices[i].NotifyPlayer(playerGameObject, true);
 		}
 		//All transforms
 		CustomNetTransform[] scripts = FindObjectsOfType<CustomNetTransform>();
-		for (var i = 0; i < scripts.Length; i++) {
-			scripts[i].NotifyPlayer(playerGameObject, true);
+		for (var i = 0; i < scripts.Length; i++)
+		{
+			scripts[i].NotifyPlayer(playerGameObject);
 		}
-		//All players
-		List<ConnectedPlayer> players = PlayerList.Instance.InGamePlayers;
-		for ( var i = 0; i < players.Count; i++ ) {
-			players[i].Script.PlayerSync.NotifyPlayer( playerGameObject, true );
+		//All player bodies
+		PlayerSync[] playerBodies = FindObjectsOfType<PlayerSync>();
+		for (var i = 0; i < playerBodies.Length; i++)
+		{
+			playerBodies[i].NotifyPlayer(playerGameObject, true);
+		}
+
+		//StorageObject UUIDs
+		StorageObject[] storageObjs = FindObjectsOfType<StorageObject>();
+		for (var i = 0; i < storageObjs.Length; i++)
+		{
+			storageObjs[i].SyncUUIDsWithPlayer(playerGameObject);
 		}
 
 		//TileChange Data
 		TileChangeManager[] tcManagers = FindObjectsOfType<TileChangeManager>();
-		for(var i = 0; i < tcManagers.Length; i++){
-			tcManagers[i].NotifyPlayer( playerGameObject );
+		for (var i = 0; i < tcManagers.Length; i++)
+		{
+			tcManagers[i].NotifyPlayer(playerGameObject);
 		}
 
-		Logger.Log($"Sent sync data ({matrices.Length} matrices, {scripts.Length} transforms, {players.Count} players) to {playerGameObject.name}", Category.Connections);
+		//Doors
+		DoorController[] doors = FindObjectsOfType<DoorController>();
+		for (var i = 0; i < doors.Length; i++)
+		{
+			doors[i].NotifyPlayer(playerGameObject);
+		}
+
+
+
+		Logger.Log($"Sent sync data ({matrices.Length} matrices, {scripts.Length} transforms, {playerBodies.Length} players) to {playerGameObject.name}", Category.Connections);
 	}
 
 	private IEnumerator WaitForSpawnListSetUp(NetworkConnection conn)
@@ -351,31 +371,31 @@ public class CustomNetworkManager : NetworkManager
 	public override void OnServerDisconnect(NetworkConnection conn)
 	{
 		var player = PlayerList.Instance.Get(conn);
-		if ( player.GameObject )
+		if (player.GameObject)
 		{
-			player.GameObject.GetComponent<PlayerNetworkActions>().DropAll(true);
+			//Tell the inventorymanager about the disconnect so it can perform whatever cleanup is needed
+			InventoryManager.HandleDisconnect(player.GameObject);
 		}
+
 		Logger.Log($"Player Disconnected: {player.Name}", Category.Connections);
 		PlayerList.Instance.Remove(conn);
 	}
 
-	private void OnLevelFinishedLoading(Scene scene, LoadSceneMode mode)
+	private void OnLevelFinishedLoading(Scene oldScene, Scene newScene)
 	{
-		if (GameData.IsInGame && PoolManager.Instance == null)
+		if (newScene.name != "Lobby")
 		{
-			ObjectManager.StartPoolManager();
-		}
-
-		if (IsClientConnected() && GameData.IsInGame)
-		{
-			//make sure login window does not show on scene changes if connected
-//			UIManager.Display.logInWindow.SetActive(false);
-//			UIManager.Display.infoWindow.SetActive(false);
-			StartCoroutine(DoHeadlessCheck());
+			//INGAME:
+			EventManager.Broadcast(EVENT.RoundStarted);
+			if (PoolManager.Instance == null)
+			{
+				ObjectManager.StartPoolManager();
+				StartCoroutine(DoHeadlessCheck());
+			}
 		}
 		else
 		{
-			StartCoroutine(DoHeadlessCheck());
+			EventManager.Broadcast(EVENT.RoundEnded);
 		}
 	}
 
@@ -386,9 +406,9 @@ public class CustomNetworkManager : NetworkManager
 		{
 			if (!IsClientConnected())
 			{
-//				if (GameData.IsInGame) {
-//					UIManager.Display.logInWindow.SetActive(true);
-//				}
+				//				if (GameData.IsInGame) {
+				//					UIManager.Display.logInWindow.SetActive(true);
+				//				}
 				UIManager.Display.jobSelectWindow.SetActive(false);
 			}
 		}
@@ -400,7 +420,6 @@ public class CustomNetworkManager : NetworkManager
 		}
 	}
 
-
 	//Editor item transform dance experiments
 #if UNITY_EDITOR
 	public void MoveAll()
@@ -411,10 +430,10 @@ public class CustomNetworkManager : NetworkManager
 	private IEnumerator TransformWaltz()
 	{
 		CustomNetTransform[] scripts = FindObjectsOfType<CustomNetTransform>();
-		var sequence = new[]
+		var sequence = new []
 		{
 			Vector3.right, Vector3.up, Vector3.left, Vector3.down,
-			Vector3.down, Vector3.left, Vector3.up, Vector3.right
+				Vector3.down, Vector3.left, Vector3.up, Vector3.right
 		};
 		for (var i = 0; i < sequence.Length; i++)
 		{

@@ -13,7 +13,10 @@ public class ConnectedPlayer
     /// Flags if player received a bunch of sync messages upon joining
     private bool synced;
 
-    public bool IsAuthenticated => steamId != 0;
+	//Name that is used if the client's character name is empty
+	private const string DEFAULT_NAME = "Anonymous Spessman";
+
+	public bool IsAuthenticated => steamId != 0;
 
     public static readonly ConnectedPlayer Invalid = new ConnectedPlayer
     {
@@ -76,7 +79,7 @@ public class ConnectedPlayer
         get { return steamId; }
         set
         {
-			
+
             if ( value != 0 )
             {
                 steamId = value;
@@ -102,15 +105,41 @@ public class ConnectedPlayer
 
     public bool HasNoName()
     {
-        return name == null || name.Trim().Equals("");
+        return name == null || name.Trim().Equals("") || name == DEFAULT_NAME;
     }
+
+	/// <summary>
+	/// Checks against a set of rules for user names like Null or whitespace
+	/// </summary>
+	/// <param name="newName"></param>
+	/// <returns>True if the name passes all tests, false if it does not</returns>
+	public static bool isValidName(string newName)
+	{
+		if (string.IsNullOrWhiteSpace(newName))
+		{
+			return false;
+		}else{
+			return true;
+		}
+	}
 
     private void TryChangeName(string playerName)
     {
-        if ( playerName == null || playerName.Trim().Equals("") || name == playerName )
-        {
-            return;
-        }
+		//When a ConnectedPlayer object is initialised it has a null value
+		//We want to make sure that it gets set to something if the client requested something bad
+		//Issue #1377
+		if (isValidName(playerName) == false)
+		{
+			Logger.LogWarning("Attempting to assign invalid name to ConnectedPlayer. Assigning default name " + DEFAULT_NAME + " instead");
+			playerName = DEFAULT_NAME;
+		}
+
+		//Player name is unchanged, return early.
+		if(playerName == name)
+		{
+			return;
+		}
+
         var playerList = PlayerList.Instance;
         if ( playerList == null )
         {
@@ -121,7 +150,7 @@ public class ConnectedPlayer
 
         string uniqueName = GetUniqueName(playerName);
         name = uniqueName;
-		
+
 //        if ( !playerList.playerScores.ContainsKey(uniqueName) )
 //        {
 //            playerList.playerScores.Add(uniqueName, 0);

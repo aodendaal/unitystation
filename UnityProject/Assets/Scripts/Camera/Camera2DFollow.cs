@@ -9,6 +9,7 @@ public class Camera2DFollow : MonoBehaviour
 	private readonly bool adjustPixel = false;
 	private readonly float lookAheadMoveThreshold = 0.1f;
 	private readonly float lookAheadReturnSpeed = 0.5f;
+
 	private readonly float yOffSet = -0.5f;
 
 	private Vector3 cachePos;
@@ -41,6 +42,9 @@ public class Camera2DFollow : MonoBehaviour
     public GameObject stencilMask;
 
 	[HideInInspector]
+	public LightingSystem lightingSystem;
+
+	[HideInInspector]
 	public Camera cam;
 
 	private void Awake()
@@ -49,6 +53,7 @@ public class Camera2DFollow : MonoBehaviour
 		{
 			followControl = this;
 			cam = GetComponent<Camera>();
+			lightingSystem = GetComponent<LightingSystem>();
 		}
 		else
 		{
@@ -74,10 +79,10 @@ public class Camera2DFollow : MonoBehaviour
 			return;
 		}
 		//Really should sort out the load order and then we can remove this check:
-		if(!PlayerManager.LocalPlayerScript.weaponNetworkActions){
+		if(!PlayerManager.LocalPlayerScript.IsGhost && !PlayerManager.LocalPlayerScript.weaponNetworkActions){
 			return;
 		}
-		if (target != null && !isShaking && !PlayerManager.LocalPlayerScript.weaponNetworkActions.lerping)
+		if (target != null && !isShaking)
 		{
 			// only update lookahead pos if accelerating or changed direction
 			float xMoveDelta = (target.position - lastTargetPosition).x;
@@ -94,10 +99,14 @@ public class Camera2DFollow : MonoBehaviour
 			}
 
 			Vector3 aheadTargetPos = target.position + lookAheadPos + Vector3.forward * offsetZ;
+
 			aheadTargetPos.y += yOffSet;
-			aheadTargetPos.x += xOffset;
+
+			// Disabled for now since it introduced errors in to pixel perfect light renderer.
+			//aheadTargetPos.x += xOffset;
+
 			Vector3 newPos = Vector3.SmoothDamp(transform.position, aheadTargetPos, ref currentVelocity, damping);
-	
+
 			if (adjustPixel)
 			{
 				newPos.x = Mathf.RoundToInt(newPos.x * pixelAdjustment) / pixelAdjustment;
@@ -140,8 +149,8 @@ public class Camera2DFollow : MonoBehaviour
 		isShaking = true;
 		cachePos = transform.position;
 		shakeAmount = amt;
-		InvokeRepeating("DoShake", 0, 0.01f);
-		Invoke("StopShake", length);
+		InvokeRepeating(nameof( DoShake ), 0, 0.01f);
+		Invoke(nameof( StopShake ), length);
 	}
 
 	private void DoShake()
@@ -160,7 +169,7 @@ public class Camera2DFollow : MonoBehaviour
 	private void StopShake()
 	{
 		isShaking = false;
-		CancelInvoke("DoShake");
+		CancelInvoke(nameof( DoShake ));
 		transform.position = cachePos;
 	}
 }

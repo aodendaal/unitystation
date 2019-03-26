@@ -23,6 +23,7 @@ public class ShutterController : ObjectTrigger
 
 	private void Awake()
 	{
+		// Initialize animator and Register Door components
 		animator = gameObject.GetComponent<Animator>();
 		registerTile = gameObject.GetComponent<RegisterDoor>();
 
@@ -30,16 +31,22 @@ public class ShutterController : ObjectTrigger
 		closedSortingLayer = SortingLayer.NameToID("Doors Open");
 		openLayer = LayerMask.NameToLayer("Door Open");
 		openSortingLayer = SortingLayer.NameToID("Doors Closed");
-		SetLayer(openLayer,openSortingLayer);
 	}
 
-	public void Start(){
-		gameObject.SendMessage("TurnOffDoorFov", null, SendMessageOptions.DontRequireReceiver);
-	}
-
-	public override void Trigger(bool iState)
+	public void Start()
 	{
-		tempStateCache = iState;
+		// Close or open the door depending on Register Door Script's "Is Closed" flag at object creation
+		Trigger(registerTile.IsClosed);
+
+		// If the animator has not yet initialized for the object, try again
+		if (waitToCheckState)
+		{
+			WaitToTryAgain();
+		}
+	}
+
+	public override void Trigger(bool isClosed)
+	{
 		if (waitToCheckState)
 		{
 			return;
@@ -47,22 +54,35 @@ public class ShutterController : ObjectTrigger
 
 		if (animator == null)
 		{
+			// Store isClosed as a property for non-initialized animator
+			tempStateCache = isClosed;
+
 			waitToCheckState = true;
 			return;
 		}
 
-		SetState(iState);
+		SetState(isClosed);
 	}
 
-	private void SetState(bool state)
+	/// <summary>
+	/// Sets the state of Shutter object to open or closed depending on isClosed parameter.
+	/// This will start the relevant animation loop as well as change the Shutter's layers.
+	/// </summary>
+	/// <param name="isClosed">The state to set the door (Open, Closed)</param>
+	private void SetState(bool isClosed)
 	{
-		IsClosed = state;
-		registerTile.IsClosed = state;
-		if (state)
+		this.IsClosed = isClosed;
+		registerTile.IsClosed = isClosed;
+
+		// Start animation change process
+		animator.SetBool("close", isClosed);
+
+		if (isClosed)
 		{
 			gameObject.SendMessage("TurnOnDoorFov", null, SendMessageOptions.DontRequireReceiver);
 			SetLayer(closedLayer, closedSortingLayer);
-		//	gameObject.SendMessage("TurnOnDoorFov");
+
+			// Damage living objects underneath shutter as it closes
 			if (isServer)
 			{
 				DamageOnClose();
@@ -72,15 +92,11 @@ public class ShutterController : ObjectTrigger
 		{
 			SetLayer(openLayer, openSortingLayer);
 			gameObject.SendMessage("TurnOffDoorFov", null, SendMessageOptions.DontRequireReceiver);
-			//gameObject.SendMessage("TurnOffDoorFov");
 		}
-
-		animator.SetBool("close", state);
 	}
 
 	public void SetLayer(int layer, int sortingLayer)
 	{
-		//		GetComponentInChildren<SpriteRenderer>().sortingLayerID = sortingLayer;
 		gameObject.layer = layer;
 		foreach (Transform child in transform)
 		{
@@ -88,15 +104,16 @@ public class ShutterController : ObjectTrigger
 		}
 	}
 
-    [Server]
-    private void DamageOnClose()
-    {
-        IEnumerable<HealthBehaviour> healthBehaviours = matrix.Get<HealthBehaviour>(registerTile.Position);
-        foreach (HealthBehaviour healthBehaviour in healthBehaviours)
-        {
-            healthBehaviour.ApplyDamage(gameObject, 500, DamageType.BRUTE);
-        }
-    }
+	[Server]
+	private void DamageOnClose()
+	{
+		var healthBehaviours = matrix.Get<LivingHealthBehaviour>(registerTile.Position);
+		for (var i = 0; i < healthBehaviours.Count; i++)
+		{
+			LivingHealthBehaviour healthBehaviour = healthBehaviours[i];
+			healthBehaviour.ApplyDamage(gameObject, 500, DamageType.Brute);
+		}
+	}
 
 	//Handle network spawn sync failure
 	private IEnumerator WaitToTryAgain()
@@ -118,6 +135,7 @@ public class ShutterController : ObjectTrigger
 		{
 			SetState(tempStateCache);
 		}
+
 		waitToCheckState = false;
 	}
 }

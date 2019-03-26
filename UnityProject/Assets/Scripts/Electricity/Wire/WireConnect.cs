@@ -1,187 +1,223 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.Networking;
 using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.Networking;
+
+public class WireConnect : ElectricalOIinheritance
+{
+	public CableLine RelatedLine;
+
+	public override void DirectionInput( GameObject SourceInstance, IElectricityIO ComingFrom, CableLine PassOn  = null){
+		InputOutputFunctions.DirectionInput ( SourceInstance, ComingFrom, this);
+		if (PassOn == null) {
+			if (RelatedLine != null) {
+				if (RelatedLine.TheEnd == this.GetComponent<IElectricityIO> ()) {
+					//Logger.Log ("looc");
+				} else if (RelatedLine.TheStart == this.GetComponent<IElectricityIO> ()) {
+					//Logger.Log ("cool");
+				} else {
+					//Logger.Log ("hELP{!!!");
+				}
+			} else {
+				if (!(Data.connections.Count > 2)) {
+					RelatedLine = new CableLine ();
+					if (RelatedLine == null) {
+						Logger.Log ("HE:LP:::::::::::::::::::niniinininininin");
+					}
+					RelatedLine.InitialGenerator = SourceInstance;
+					RelatedLine.TheStart = this;
+					lineExplore (RelatedLine, SourceInstance);
+					if (RelatedLine.TheEnd == null) {
+						RelatedLine = null;
+					}
+				}
+			}
+		}
 
 
-public class WireConnect : NetworkBehaviour, IElectricityIO
+
+	}
+
+	public override void DirectionOutput( GameObject SourceInstance){
+		
+		int SourceInstanceID = SourceInstance.GetInstanceID();
+		//Logger.Log (this.gameObject.GetInstanceID().ToString() + " <ID | Downstream = "+Data.Downstream[SourceInstanceID].Count.ToString() + " Upstream = " + Data.Upstream[SourceInstanceID].Count.ToString () + this.name + " <  name! ", Category.Electrical);
+		if (RelatedLine == null) {
+			InputOutputFunctions.DirectionOutput (SourceInstance, this);
+		} else {
+			
+			IElectricityIO GoingTo; 
+			if (RelatedLine.TheEnd == this.GetComponent<IElectricityIO> ()) {
+				GoingTo = RelatedLine.TheStart;
+			} else if (RelatedLine.TheStart == this.GetComponent<IElectricityIO> ()) {
+				GoingTo = RelatedLine.TheEnd;
+			} else {
+				GoingTo = null;
+				return; 
+			}
+
+			if (!(Data.Upstream.ContainsKey(SourceInstanceID)))
+			{
+				Data.Upstream[SourceInstanceID] = new HashSet<IElectricityIO>();
+			}
+			if (!(Data.Downstream.ContainsKey(SourceInstanceID)))
+			{
+				Data.Downstream[SourceInstanceID] = new HashSet<IElectricityIO>();
+			}
+
+			if (GoingTo != null) {
+				//Logger.Log ("to" + GoingTo.GameObject ().name);///wow
+			}
+
+
+			foreach (IElectricityIO bob in Data.Upstream [SourceInstanceID]){
+				//Logger.Log("Upstream" + bob.GameObject ().name );
+			}
+			if (!(Data.Downstream [SourceInstanceID].Contains (GoingTo) || Data.Upstream [SourceInstanceID].Contains (GoingTo)) )  {
+				Data.Downstream [SourceInstanceID].Add (GoingTo);
+
+				RelatedLine.DirectionInput (SourceInstance, this);
+			} else {
+				InputOutputFunctions.DirectionOutput (SourceInstance, this,RelatedLine);
+			}
+		}
+
+		Data.DownstreamCount = Data.Downstream[SourceInstanceID].Count;
+		Data.UpstreamCount = Data.Upstream[SourceInstanceID].Count;
+	}
+
+	public override void ElectricityOutput(float Current, GameObject SourceInstance)
 	{
-		public StructurePowerWire wire;
+	//Logger.Log (CurrentInWire.ToString () + " How much current", Category.Electrical);
+	InputOutputFunctions.ElectricityOutput(Current, SourceInstance, this);
+	Data.ActualCurrentChargeInWire = ElectricityFunctions.WorkOutActualNumbers(this);
+	Data.CurrentInWire = Data.ActualCurrentChargeInWire.Current;
+	Data.ActualVoltage = Data.ActualCurrentChargeInWire.Voltage;
+	Data.EstimatedResistance = Data.ActualCurrentChargeInWire.EstimatedResistant;
+	if (RelatedLine != null) { 
+		RelatedLine.UpdateCoveringCable(this);
+	}
+		}
 
-		//Objects in reach of this wire:
-		private List<IElectricityIO> possibleConns = new List<IElectricityIO>();
 
-		//Objects this wire is connected to
-		private List<IElectricityIO> connections = new List<IElectricityIO>();
+	public void lineExplore(CableLine PassOn, GameObject SourceInstance = null){
 
-		private RegisterItem registerTile;
-		private Matrix matrix => registerTile.Matrix;
-		public PowerSupply supplySource; //Where is the voltage coming from
-		public Electricity currentChargeInWire;
-
-		private bool connected = false;
-		public int currentTick = 0;
-
-		private void OnEnable()
+		if (Data.connections.Count <= 0)
 		{
-			EventManager.AddHandler(EVENT.PowerNetSelfCheck, FindPossibleConnections);
-			if(supplySource != null){
-				supplySource.OnCircuitChange.AddListener(OnCircuitChanged);
-			}
-		}
-
-		private void OnDisable()
-		{
-			EventManager.RemoveHandler(EVENT.PowerNetSelfCheck, FindPossibleConnections);
-			if (supplySource != null) {
-				supplySource.OnCircuitChange.RemoveListener(OnCircuitChanged);
-			}
-		}
-		public override void OnStartClient()
-		{
-			base.OnStartClient();
-			registerTile = gameObject.GetComponent<RegisterItem>();
-			StartCoroutine(WaitForLoad());
-		}
-
-		IEnumerator WaitForLoad(){
-			yield return new WaitForSeconds(1f);
 			FindPossibleConnections();
 		}
 
-		[ContextMenu("FindConnections")]
-		void FindPossibleConnections(){
-			possibleConns.Clear();
-			connections.Clear();
-			int progress = 0;
-			Vector2 searchVec = transform.localPosition;
-			searchVec.x -= 1;
-			searchVec.y -= 1;
-			for (int x = 0; x < 3; x++){
-				for (int y = 0; y < 3; y++){
-					Vector3Int pos = new Vector3Int((int)searchVec.x + x,
-											  (int)searchVec.y + y, 0);
-					var conns = matrix.GetElectricalConnections(pos);
-
-					foreach(IElectricityIO io in conns){
-						possibleConns.Add(io);
-
-						//Check if InputPosition and OutputPosition connect with this wire
-						if(ConnectionMap.IsConnectedToTile(GetConnPoints(), (AdjDir)progress, io.GetConnPoints())){
-							connections.Add(io);
-						} 
+		if (!(Data.connections.Count > 2)) 
+		{
+			RelatedLine = PassOn;
+			if (!(this == PassOn.TheStart)) 
+			{
+			if (PassOn.TheEnd != null)
+			{
+				PassOn.Covering.Add(PassOn.TheEnd);
+				PassOn.TheEnd = this;
+			}
+			else
+			{
+				PassOn.TheEnd = this;
+			}
+			}
+			for (int i = 0; i < Data.connections.Count; i++)
+			{
+				if (!(RelatedLine.Covering.Contains(Data.connections[i]) || RelatedLine.TheStart == Data.connections[i]))
+				{
+					bool canpass = true;
+					if (SourceInstance != null) {
+						int SourceInstanceID = SourceInstance.GetInstanceID();
+						if (Data.Upstream[SourceInstanceID].Contains(Data.connections[i])){
+							canpass = false;
+						}
 					}
-					progress++;
+					if (canpass) {
+						if (Data.connections [i].GameObject ().GetComponent<WireConnect> () != null) {
+							Data.connections [i].GameObject ().GetComponent<WireConnect> ().lineExplore (RelatedLine);
+						}
+					}
+
 				}
 			}
-		}
-
-		void OnDrawGizmos(){
-			if (connected) {
-				Gizmos.color = Color.yellow;
-				Gizmos.DrawSphere(transform.position, 0.1f);
-			}
-		}
-
-		public ConnPoint GetConnPoints(){
-			ConnPoint conns = new ConnPoint();
-			conns.pointA = wire.DirectionStart;
-			conns.pointB = wire.DirectionEnd;
-			return conns;
-		}
-
-		public int InputPosition(){
-			return wire.DirectionStart;
-		}
-
-		public int OutputPosition(){
-			return wire.DirectionEnd;
-		}
-
-		public GameObject GameObject(){
-			return gameObject;
-		}
-
-		//Do things when the circuit breaks etc
-		public void OnCircuitChanged(){
-			//TODO recheck connectivity and drain voltage from wire
-			//TODO Remove wire from PowerSupply event if it is no longer connected to it
-			SelfCheckState();
-		}
-
-		//Start a monitor of its own state (triggered by a circuit change event)
-		private void SelfCheckState(){
-			//clear the charge in the wire:
-			currentChargeInWire.voltage = 0f;
-			currentChargeInWire.current = 0f;
-			currentChargeInWire.suppliers = new PowerSupply[0];
-
-			//After the wire is discharged, wait 1f to see if it has charged again
-			Invoke("CheckState", 1f);
-		}
-
-		//See if there is charge in the wire:
-		private void CheckState(){
-			if(currentChargeInWire.suppliers.Length == 0){
-				if(supplySource != null){
-					//Wire is broken, leave wire discharged and remove the event
-					supplySource.OnCircuitChange.RemoveListener(OnCircuitChanged);
-					connected = false;
-					supplySource = null;
-				}
-			} //else its all good, leave as is
-		}
-
-		//Feed electricity into this wire:
-		public void ElectricityInput(int tick, Electricity electricity){ //TODO A struct that can be passed between connections for Voltage, current etc
-			currentChargeInWire = electricity;
-
-			//The supply found at index 0 is the actual source that has combined the resources of the other sources and
-			//sent the actual electrcity struct. So reference that one for supplySource
-			if(supplySource != electricity.suppliers[0]){
-				supplySource = electricity.suppliers[0];
-				supplySource.OnCircuitChange.AddListener(OnCircuitChanged);
-			}
-			//For testing (shows the yellow sphere gizmo that shows it is connected)
-			if (electricity.voltage > 1f) {
-				connected = true;
-			}
-
-			//Pass the charge on:
-			ElectricityOutput(tick, currentChargeInWire);
-		}
-
-		//Output electricity to this next wire/object
-		public void ElectricityOutput(int tick, Electricity electricity){
-			if(currentTick == tick){
-				//No need to process a tick twice
-				return;
-			}
-			currentTick = tick;
-			for (int i = 0; i < connections.Count; i++){
-				connections[i].ElectricityInput(tick, electricity);
-			}
-		}
-
-		[ContextMenu("PrintAllLists")]
-		public void DebugPrintLists(){
-			
-			foreach(IElectricityIO io in possibleConns){
-				Logger.Log($" Possilbe conn at {io.GameObject().transform.localPosition}",Category.Power);
-			}
-
-			foreach (IElectricityIO io in connections) {
-				Logger.Log($" Connected to something at {io.GameObject().transform.localPosition}",Category.Power);
-			}
-
-			Logger.Log($"The connection points are: {wire.DirectionStart} and {wire.DirectionEnd}",Category.Power);
-		}
-
-		[ContextMenu("GenerateTestCurrent")]
-		public void GenerateTestElectricity(){
-			connected = true;
-			Electricity newElec = new Electricity();
-			ElectricityOutput(currentTick + 1, newElec);
 		}
 	}
 
+
+	public override void FlushConnectionAndUp()
+	{
+		ElectricalDataCleanup.PowerSupplies.FlushConnectionAndUp(this);
+		RelatedLine = null;
+		InData.ControllingDevice.PotentialDestroyed();
+	}
+	public override void FlushResistanceAndUp(GameObject SourceInstance = null)
+	{
+		Logger.LogError ("yes? not ues haha lol no");
+		//yeham, Might need to work on in future but not used Currently
+		ElectricalDataCleanup.PowerSupplies.FlushResistanceAndUp(this, SourceInstance);
+	}
+	public override void FlushSupplyAndUp(GameObject SourceInstance = null)
+	{
+		bool SendToline = false;
+		if (RelatedLine != null) {
+			if (SourceInstance == null) {
+				if (Data.CurrentComingFrom.Count > 0) {
+					SendToline = true;
+				}
+			} else {
+				int InstanceID = SourceInstance.GetInstanceID ();
+				if (Data.CurrentComingFrom.ContainsKey (InstanceID)) {
+					SendToline = true;
+				} else if (Data.CurrentGoingTo.ContainsKey (InstanceID)) {
+					SendToline = true;
+				}
+			}
+		}
+		ElectricalDataCleanup.PowerSupplies.FlushSupplyAndUp(this, SourceInstance);
+		if (SendToline){
+			RelatedLine.PassOnFlushSupplyAndUp (this, SourceInstance);
+		}
+	}
+	public override void RemoveSupply(GameObject SourceInstance = null)
+	{
+		bool SendToline = false;
+		if (RelatedLine != null) {
+			if (SourceInstance == null) {
+				if (Data.Downstream.Count > 0 || Data.Upstream.Count > 0) {
+					SendToline = true;
+				}
+			} else {
+				int InstanceID = SourceInstance.GetInstanceID ();
+				if (Data.Downstream.ContainsKey (InstanceID)) {
+					SendToline = true;
+				}
+			}
+		}
+		ElectricalDataCleanup.PowerSupplies.RemoveSupply(this, SourceInstance);
+		if (SendToline){
+			RelatedLine.PassOnRemoveSupply (this, SourceInstance);
+		}
+	}
+	[ContextMethod("Details", "Magnifying_glass")]
+	public override void ShowDetails()
+	{
+	if (isServer)
+	{
+		Logger.Log("connections " + (Data.connections.Count.ToString()), Category.Electrical);
+		Logger.Log("ID " + (this.GetInstanceID()), Category.Electrical);
+		Logger.Log("Type " + (InData.Categorytype.ToString()), Category.Electrical);
+		Logger.Log("Can connect to " + (string.Join(",", InData.CanConnectTo)), Category.Electrical);
+		Logger.Log("UpstreamCount " + (Data.UpstreamCount.ToString()), Category.Electrical);
+		Logger.Log("DownstreamCount " + (Data.DownstreamCount.ToString()), Category.Electrical);
+		Logger.Log("ActualVoltage " + (Data.ActualVoltage.ToString()), Category.Electrical);
+		Logger.Log("CurrentInWire " + (Data.CurrentInWire.ToString()), Category.Electrical);
+		Logger.Log("EstimatedResistance " + (Data.EstimatedResistance.ToString()), Category.Electrical);
+		if (RelatedLine != null) {
+			Logger.Log("line heree!!!");
+		}
+	}
+
+	RequestElectricalStats.Send(PlayerManager.LocalPlayer, gameObject);	}
+}
